@@ -1,417 +1,314 @@
 # -*- coding: utf-8 -*-
 """
-BMDS2003 Data Science - Group Assignment
-Dataset: Malaysian Condominium Prices Data (houses.csv)
-Problem type: REGRESSION - predict property "price" (RM)
+streamlit_app.py
+Deployment prototype for the BMDS2003 Data Science group assignment.
+Dataset: Malaysian Condominium Prices ("houses.csv")
 
-This script follows the CRISP-DM framework and reuses techniques taught across
-Practicals 1-6:
-    - Practical 1 : core Python (functions, control flow)
-    - Practical 2 : NumPy (arrays, vectorised operations, aggregation)
-    - Practical 3 : Pandas (loading, indexing, groupby, describe, missing data)
-    - Practical 4 : EDA, IQR/Z-score outlier detection, correlation heatmap,
-                    matplotlib/seaborn visualisation
-    - Practical 5a/5b : train_test_split, KNN, SVM, scaling, cross_val_score,
-                    GridSearchCV, Decision Tree / Random Forest
-    - Practical 6a : Naive Bayes / cross-validation style model comparison
-    - Practical 6c : 3-way train/val/test split, MinMaxScaler (avoiding data
-                    leakage - fit on train only), MLPRegressor, evaluation
-                    metrics, simple deployment prototype
+Layout mirrors a typical two-page trading/prediction dashboard:
+    - "Market Overview"  : browse cleaned listing data and charts
+    - "Price Predictor"  : single-listing prediction form, with an
+                            "autofill from an existing listing" control
+                            (same idea as picking a date to autofill a
+                            single-day prediction form)
+
+Run locally with:
+    streamlit run streamlit_app.py
+
+Requires (produced by ds_assignment.py):
+    best_model.pkl, scaler.pkl, feature_columns.pkl,
+    all_results.pkl, app_sample_listings.csv
 """
 
-import os
 import pickle
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-from sklearn.preprocessing import MultiLabelBinarizer, MinMaxScaler
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.neural_network import MLPRegressor
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-
-sns.set()
-pd.set_option('display.max_columns', None)
-
-RANDOM_STATE = 42
-
-# =====================================================================
-# 1. BUSINESS UNDERSTANDING
-# =====================================================================
-# Business problem: property agents / buyers want to know a fair asking
-# price for a Malaysian condominium given its physical attributes
-# (size, bedrooms, bathrooms, facilities) and location. A reliable price
-# prediction model supports pricing decisions, investment appraisal and
-# helps flag listings that are under/over-priced relative to the market.
-# This is framed as a SUPERVISED REGRESSION problem: target = price (RM).
-
-# =====================================================================
-# 2. DATA UNDERSTANDING (Practical 3: pandas load/inspect/describe)
-# =====================================================================
-DATA_PATH = "houses.csv" if os.path.exists("houses.csv") else "/content/sample_data/houses.csv"
-
-df = pd.read_csv(DATA_PATH)
-print("Shape:", df.shape)
-df.head()
-df.info()
-df.describe(include="all").T  # summary statistics for report
-
-# =====================================================================
-# 3. DATA PREPARATION (Practical 2/3/4: cleaning, missing values, outliers)
-# =====================================================================
-
-# --- 3.1 Duplicates & essential missing rows -------------------------
-df[df["Mall"].isna() == True]
-
-print("Total duplicate rows:", df.duplicated().sum())
-df = df.drop_duplicates().reset_index(drop=True)
-
-df = df[df["Ad List"].isna() == False]
-df.info()
-
-# --- 3.2 Multi-label facilities -> binary indicator columns ----------
-# (Practical 2: array/vectorised style transform via sklearn MultiLabelBinarizer)
-df["Facilities"].sample(10)
-
-mlb = MultiLabelBinarizer()
-df["Facilities_List"] = df["Facilities"].str.split(", ")
-df = df.join(pd.DataFrame(mlb.fit_transform(df.pop('Facilities_List')),
-                           columns=[f"Facility_{c}" for c in mlb.classes_],
-                           index=df.index))
-df = df.drop(columns=["Facility_-", "Facility_10"])
-df.head()
-
-# --- 3.3 Location fields (Practical 1: string slicing/splitting) -----
-for addr in df.loc[df["Address"].isna() == False, "Address"].sample(10):
-    print(addr)
-
-df["State"] = df["Address"].apply(lambda addr: addr.split(", ")[-1])
-df["City"] = df["Address"].apply(lambda addr: addr.split(", ")[-2] if len(addr.split(", ")) > 1 else None)
-df.head()
-
-# --- 3.4 Numeric fields stored as text -> proper numeric dtype -------
-df["Bedroom"].unique()
-df["Bedroom"] = df["Bedroom"].replace("-", np.nan).astype("float64")
-
-df["Bathroom"].unique()
-df["Bathroom"] = df["Bathroom"].replace("More than 10", "10")
-df["Bathroom"] = df["Bathroom"].replace("-", np.nan).astype('float64')
-
-df["# of Floors"].unique()
-df["# of Floors"] = df["# of Floors"].replace("-", np.nan).astype('float64')
-
-df["Total Units"].unique()
-df["Total Units"] = df["Total Units"].replace("-", np.nan).astype('float64')
-
-df["Parking Lot"].unique()
-df["Parking Lot"] = df["Parking Lot"].replace("-", 0).astype('float64')
-
-df["Completion Year"].unique()
-df["Completion Year"] = df["Completion Year"].replace("-", np.nan).astype('float64')
-
-df["Property Size"].sample(10)
-df["Property Size"] = df["Property Size"].apply(lambda s: s.split(" ")[0]).astype("float64")
-df["Property Size"].sample(10)
-
-df["price"].sample(10)
-df["price"] = df["price"].apply(lambda s: "".join(s.split(" ")[1:])).astype('float64')
-df["price"].sample(10)
-
-# --- 3.5 Nearby-amenity text columns -> Has_<amenity> flags -----------
-amenity_cols = ["Mall", "Park", "School", "Hospital", "Bus Stop", "Highway",
-                 "Railway Station", "Nearby School", "Nearby Mall",
-                 "Nearby Railway Station"]
-
-for col in amenity_cols:
-    df[f"Has_{col.replace(' ', '_')}"] = df[col].notna().astype(int)
-
-df = df.drop(columns=amenity_cols)
-
-df["Firm Type"] = df["Firm Type"].fillna("Unknown")
-df = df.drop(columns=["Firm Number", "REN Number"])
-df.head()
-df.info()
-
-# --- 3.6 Outlier detection & removal (Practical 4: IQR method) -------
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-sns.boxplot(data=df, x="price", ax=axes[0])
-axes[0].set_title("price - before outlier removal")
-sns.boxplot(data=df, x="Property Size", ax=axes[1])
-axes[1].set_title("Property Size - before outlier removal")
-plt.tight_layout()
-plt.savefig("boxplot_before_outliers.png", dpi=120)
-plt.show()
-
-
-def remove_outliers_iqr(data, column):
-    """+-1.5*IQR rule, same method demonstrated in Practical 4."""
-    q1 = data[column].quantile(0.25)
-    q3 = data[column].quantile(0.75)
-    iqr = q3 - q1
-    lower_bound = q1 - 1.5 * iqr
-    upper_bound = q3 + 1.5 * iqr
-    return data[(data[column] >= lower_bound) & (data[column] <= upper_bound)]
-
-
-rows_before = len(df)
-df = remove_outliers_iqr(df, "price")
-df = remove_outliers_iqr(df, "Property Size")
-print(f"Rows removed as price/size outliers: {rows_before - len(df)}")
-
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-sns.boxplot(data=df, x="price", ax=axes[0])
-axes[0].set_title("price - after outlier removal")
-sns.boxplot(data=df, x="Property Size", ax=axes[1])
-axes[1].set_title("Property Size - after outlier removal")
-plt.tight_layout()
-plt.savefig("boxplot_after_outliers.png", dpi=120)
-plt.show()
-
-df = df.reset_index(drop=True)
-df.head()
-df.info()
-df["Property Size"].sample(10)
-
-ax = sns.histplot(data=df, x="price", kde=True)
-plt.title("Distribution of price after cleaning")
-plt.savefig("price_distribution.png", dpi=120)
-plt.show()
-
-# =====================================================================
-# 4. EXPLORATORY DATA ANALYSIS (Practical 3/4: groupby, correlation heatmap)
-# =====================================================================
-
-# --- 4.1 groupby summaries (Practical 3) ------------------------------
-state_price = df.groupby("State")["price"].mean().sort_values(ascending=False)
-print("Average price by State (top 10):")
-print(state_price.head(10))
-
-proptype_price = df.groupby("Property Type")["price"].agg(["mean", "median", "count"])
-print("\nPrice by Property Type:")
-print(proptype_price)
-
-fig, ax = plt.subplots(figsize=(10, 5))
-state_price.head(10).plot(kind="bar", ax=ax, color="steelblue")
-ax.set_ylabel("Average price (RM)")
-ax.set_title("Top 10 States by Average Condominium Price")
-plt.tight_layout()
-plt.savefig("avg_price_by_state.png", dpi=120)
-plt.show()
-
-# --- 4.2 Correlation heatmap (Practical 4) ----------------------------
-numeric_cols = df.select_dtypes(include=[np.number]).columns
-corr = df[numeric_cols].corr()
-
-plt.figure(figsize=(14, 10))
-sns.heatmap(corr, cmap="coolwarm", center=0, annot=False)
-plt.title("Correlation Heatmap of Numeric Features")
-plt.tight_layout()
-plt.savefig("correlation_heatmap.png", dpi=120)
-plt.show()
-
-print("Features most correlated with price:")
-print(corr["price"].sort_values(ascending=False).head(10))
-
-# --- 4.3 Scatter relationship (Practical 4 style) ----------------------
-plt.figure(figsize=(6, 5))
-plt.scatter(df["Property Size"], df["price"], alpha=0.3)
-plt.xlabel("Property Size (sq.ft.)")
-plt.ylabel("price (RM)")
-plt.title("Property Size vs price")
-plt.tight_layout()
-plt.savefig("size_vs_price.png", dpi=120)
-plt.show()
-
-# =====================================================================
-# 5. FEATURE ENGINEERING / ENCODING
-# =====================================================================
-# Drop identifier / free-text / very-high-cardinality columns that add
-# noise rather than predictive signal for a regression model.
-drop_cols = ["description", "Ad List", "Building Name", "Developer",
-             "Address", "City", "Category", "Facilities"]
-df_model = df.drop(columns=[c for c in drop_cols if c in df.columns])
-
-# Group the long tail of States into "Other" to keep one-hot encoding compact
-top_states = df_model["State"].value_counts().nlargest(10).index
-df_model["State"] = df_model["State"].where(df_model["State"].isin(top_states), "Other")
-
-categorical_cols = ["Tenure Type", "Property Type", "Floor Range",
-                     "Land Title", "Firm Type", "State"]
-df_model = pd.get_dummies(df_model, columns=categorical_cols, drop_first=True)
-
-# Impute remaining numeric missing values with the median (robust to skew)
-numeric_feature_cols = df_model.select_dtypes(include=[np.number]).columns.drop("price")
-for col in numeric_feature_cols:
-    if df_model[col].isna().any():
-        df_model[col] = df_model[col].fillna(df_model[col].median())
-
-df_model.info()
-
-# =====================================================================
-# 6. MODELLING (Practical 5a/5b/6c: split -> scale -> train -> tune)
-# =====================================================================
-X = df_model.drop(columns=["price"])
-y = df_model["price"]
-
-# 3-way split (Practical 6c): 60% train / 20% validation / 20% test
-X_temp, X_test, y_temp, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=RANDOM_STATE)
-X_train, X_val, y_train, y_val = train_test_split(
-    X_temp, y_temp, test_size=0.25, random_state=RANDOM_STATE)  # 0.25*0.8=0.2
-
-print(f"Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
-
-# Feature scaling - fit ONLY on training data to avoid data leakage
-# (same principle emphasised in Practical 6c)
-scaler = MinMaxScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_val_scaled = scaler.transform(X_val)
-X_test_scaled = scaler.transform(X_test)
-
-
-def evaluate(name, model, X_te, y_te):
-    """Common evaluation routine (Practical 6c metrics)."""
-    preds = model.predict(X_te)
-    mse = mean_squared_error(y_te, preds)
-    rmse = np.sqrt(mse)
-    mae = mean_absolute_error(y_te, preds)
-    r2 = r2_score(y_te, preds)
-    print(f"[{name}] RMSE={rmse:,.2f}  MAE={mae:,.2f}  R2={r2:.4f}")
-    return {"Model": name, "RMSE": rmse, "MAE": mae, "R2": r2}
-
-
-results = []
-
-# --- 6.1 Baseline model: K-Nearest Neighbours (Practical 5a) ----------
-knn_baseline = KNeighborsRegressor(n_neighbors=5)
-knn_baseline.fit(X_train_scaled, y_train)
-
-cv_scores_knn = cross_val_score(knn_baseline, X_train_scaled, y_train, cv=5,
-                                 scoring="r2")
-print(f"KNN baseline 5-fold CV R2: {cv_scores_knn.mean():.4f} (+/- {cv_scores_knn.std():.4f})")
-results.append(evaluate("KNN (baseline)", knn_baseline, X_test_scaled, y_test))
-
-# --- 6.2 Decision Tree Regressor with GridSearchCV (Practical 5b) -----
-param_grid_dt = {
-    "max_depth": [5, 10, 20, None],
-    "min_samples_split": [2, 5, 10],
-    "min_samples_leaf": [1, 2, 4],
-}
-grid_dt = GridSearchCV(DecisionTreeRegressor(random_state=RANDOM_STATE),
-                        param_grid_dt, cv=5, scoring="r2", n_jobs=-1)
-grid_dt.fit(X_train_scaled, y_train)
-print("Best Decision Tree params:", grid_dt.best_params_)
-best_dt = grid_dt.best_estimator_
-results.append(evaluate("Decision Tree", best_dt, X_test_scaled, y_test))
-
-# --- 6.3 Random Forest Regressor with GridSearchCV (Practical 5b) -----
-param_grid_rf = {
-    "n_estimators": [100, 200],
-    "max_depth": [10, 20, None],
-    "min_samples_leaf": [1, 2, 4],
-}
-grid_rf = GridSearchCV(RandomForestRegressor(random_state=RANDOM_STATE),
-                        param_grid_rf, cv=5, scoring="r2", n_jobs=-1)
-grid_rf.fit(X_train_scaled, y_train)
-print("Best Random Forest params:", grid_rf.best_params_)
-best_rf = grid_rf.best_estimator_
-results.append(evaluate("Random Forest", best_rf, X_test_scaled, y_test))
-
-# --- 6.4 MLP Regressor (Practical 6c) ----------------------------------
-mlp = MLPRegressor(
-    hidden_layer_sizes=(64, 32),
-    activation="relu",
-    solver="adam",
-    max_iter=1000,
-    early_stopping=True,
-    random_state=RANDOM_STATE,
-)
-mlp.fit(X_train_scaled, y_train)
-results.append(evaluate("MLP Regressor", mlp, X_test_scaled, y_test))
-
-# Use validation split to sanity-check the chosen MLP before final test reporting
-val_r2 = r2_score(y_val, mlp.predict(X_val_scaled))
-print(f"MLP validation R2: {val_r2:.4f}")
-
-# =====================================================================
-# 7. EVALUATION - MODEL COMPARISON (Practical 5b/6c)
-# =====================================================================
-results_df = pd.DataFrame(results).sort_values("RMSE")
-print("\nModel comparison (sorted by RMSE, lower is better):")
-print(results_df.to_string(index=False))
-
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-sns.barplot(data=results_df, x="Model", y="RMSE", hue="Model", ax=axes[0],
-            palette="viridis", legend=False)
-axes[0].set_title("RMSE by Model (lower is better)")
-axes[0].tick_params(axis="x", rotation=20)
-
-sns.barplot(data=results_df, x="Model", y="R2", hue="Model", ax=axes[1],
-            palette="viridis", legend=False)
-axes[1].set_title("R2 Score by Model (higher is better)")
-axes[1].tick_params(axis="x", rotation=20)
-plt.tight_layout()
-plt.savefig("model_comparison.png", dpi=120)
-plt.show()
-
-# Pick the best model (lowest RMSE) to persist for the deployment prototype
-best_row = results_df.iloc[0]
-model_lookup = {
-    "KNN (baseline)": knn_baseline,
-    "Decision Tree": best_dt,
-    "Random Forest": best_rf,
-    "MLP Regressor": mlp,
-}
-best_model = model_lookup[best_row["Model"]]
-print(f"\nBest model selected for deployment: {best_row['Model']}")
-
-# Actual vs Predicted plot for the best model
-best_preds = best_model.predict(X_test_scaled)
-plt.figure(figsize=(6, 6))
-plt.scatter(y_test, best_preds, alpha=0.3)
-lims = [min(y_test.min(), best_preds.min()), max(y_test.max(), best_preds.max())]
-plt.plot(lims, lims, "r--")
-plt.xlabel("Actual price (RM)")
-plt.ylabel("Predicted price (RM)")
-plt.title(f"Actual vs Predicted price - {best_row['Model']}")
-plt.tight_layout()
-plt.savefig("actual_vs_predicted.png", dpi=120)
-plt.show()
-
-# =====================================================================
-# 8. DEPLOYMENT PREP - persist model + scaler + feature columns
-#    (used by the accompanying Streamlit prototype, streamlit_app.py)
-# =====================================================================
-with open("best_model.pkl", "wb") as f:
-    pickle.dump(best_model, f)
-with open("scaler.pkl", "wb") as f:
-    pickle.dump(scaler, f)
-with open("feature_columns.pkl", "wb") as f:
-    pickle.dump(list(X.columns), f)
-
-with open("all_results.pkl", "wb") as f:
-    pickle.dump(results_df, f)
-
-# Save a sample of cleaned (pre-encoding), human-readable rows so the
-# Streamlit prototype can offer an "autofill from an existing listing"
-# feature, the same idea as the reference prototype's "autofill from
-# existing date" control.
-readable_cols = [
-    "Bedroom", "Bathroom", "Property Size", "# of Floors", "Total Units",
-    "Parking Lot", "Completion Year", "Tenure Type", "Property Type",
-    "Floor Range", "Land Title", "State", "price",
+import streamlit as st
+
+st.set_page_config(page_title="Condo.Price Predict", page_icon="🏢", layout="wide")
+
+# Resolve all data/model file paths relative to THIS script's location,
+# not the current working directory. This matters because `streamlit run`
+# can be launched from a different folder (e.g. repo root) than where
+# app.py / streamlit_app.py and the .pkl files actually live.
+APP_DIR = Path(__file__).resolve().parent
+
+REQUIRED_FILES = [
+    "best_model.pkl", "scaler.pkl", "feature_columns.pkl",
+    "app_sample_listings.csv",
 ]
-facility_cols = [c for c in df.columns if c.startswith("Facility_")]
-has_cols = [c for c in df.columns if c.startswith("Has_")]
-app_sample = df[readable_cols + facility_cols + has_cols].sample(
-    n=min(300, len(df)), random_state=RANDOM_STATE).reset_index(drop=True)
-app_sample.to_csv("app_sample_listings.csv", index=False)
+missing = [f for f in REQUIRED_FILES if not (APP_DIR / f).exists()]
+if missing:
+    st.error(
+        "Missing required file(s): " + ", ".join(missing) + "\n\n"
+        f"Looked in: `{APP_DIR}`\n\n"
+        "These files are generated by running `ds_assignment.py` first "
+        "(it trains the models and saves best_model.pkl, scaler.pkl, "
+        "feature_columns.pkl, all_results.pkl and app_sample_listings.csv). "
+        "Make sure `ds_assignment.py` has been run at least once, and that "
+        "its output files sit in the **same folder** as this app script "
+        "before running `streamlit run streamlit_app.py`."
+    )
+    st.stop()
 
-print("\nSaved best_model.pkl, scaler.pkl, feature_columns.pkl, "
-      "all_results.pkl, app_sample_listings.csv for deployment.")
+FACILITY_OPTIONS = [
+    "Barbeque area", "Club house", "Gymnasium", "Jogging Track", "Lift",
+    "Minimart", "Multipurpose hall", "Parking", "Playground", "Sauna",
+    "Security", "Squash Court", "Swimming Pool", "Tennis Court",
+]
+NEARBY_OPTIONS = [
+    "Mall", "Park", "School", "Hospital", "Bus_Stop", "Highway",
+    "Railway_Station", "Nearby_School", "Nearby_Mall", "Nearby_Railway_Station",
+]
+PROPERTY_TYPES = ["Apartment", "Condominium", "Service Residence", "Studio",
+                   "Duplex", "Flat", "Townhouse Condo", "Others"]
+STATE_OPTIONS = ["Selangor", "Kuala Lumpur", "Johor", "Penang", "Melaka",
+                  "Negeri Sembilan", "Sabah", "Sarawak", "Putrajaya", "Other"]
+
+
+# ---------------------------------------------------------------------
+# Cached loaders
+# ---------------------------------------------------------------------
+@st.cache_resource
+def load_model_artifacts():
+    with open(APP_DIR / "best_model.pkl", "rb") as f:
+        model = pickle.load(f)
+    with open(APP_DIR / "scaler.pkl", "rb") as f:
+        scaler = pickle.load(f)
+    with open(APP_DIR / "feature_columns.pkl", "rb") as f:
+        feature_columns = pickle.load(f)
+    try:
+        with open(APP_DIR / "all_results.pkl", "rb") as f:
+            results_df = pickle.load(f)
+    except FileNotFoundError:
+        results_df = None
+    return model, scaler, feature_columns, results_df
+
+
+@st.cache_data
+def load_sample_listings():
+    return pd.read_csv(APP_DIR / "app_sample_listings.csv")
+
+
+model, scaler, feature_columns, results_df = load_model_artifacts()
+sample_df = load_sample_listings()
+
+# ---------------------------------------------------------------------
+# Header / navigation (mirrors the reference app's top nav bar)
+# ---------------------------------------------------------------------
+st.markdown(
+    """
+    <div style="background-color:#0f1b2d;padding:14px 20px;border-radius:6px;
+                display:flex;align-items:center;justify-content:space-between;">
+        <span style="color:white;font-size:22px;font-weight:600;">
+            🏢 Condo.Price Predict
+        </span>
+        <span style="color:#9fb3c8;font-size:13px;">
+            BMDS2003 Data Science &middot; Malaysian Condominium Prices
+        </span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.write("")
+
+tab_overview, tab_predict = st.tabs(["📊 Market Overview", "🔮 Price Predictor"])
+
+# =====================================================================
+# PAGE 1 - MARKET OVERVIEW  (analogous to the "Trading Chart" page)
+# =====================================================================
+with tab_overview:
+    st.subheader("Cleaned Listings Sample")
+    st.caption(
+        "A random sample of cleaned condominium listings used to train "
+        "the model. Filter by state and property type to explore."
+    )
+
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        state_filter = st.multiselect("Filter by State", sorted(sample_df["State"].unique()))
+    with col_f2:
+        type_filter = st.multiselect("Filter by Property Type", sorted(sample_df["Property Type"].unique()))
+
+    filtered = sample_df.copy()
+    if state_filter:
+        filtered = filtered[filtered["State"].isin(state_filter)]
+    if type_filter:
+        filtered = filtered[filtered["Property Type"].isin(type_filter)]
+
+    st.dataframe(
+        filtered[["Bedroom", "Bathroom", "Property Size", "Property Type",
+                  "Tenure Type", "State", "price"]],
+        width="stretch", height=280,
+    )
+
+    st.divider()
+    st.subheader("Model Performance Comparison")
+    if results_df is not None:
+        st.caption("RMSE / MAE / R² for each of the models trained in ds_assignment.py.")
+        st.dataframe(results_df.reset_index(drop=True), width="stretch")
+        st.bar_chart(results_df.set_index("Model")[["RMSE"]])
+    else:
+        st.info("Run ds_assignment.py first to generate all_results.pkl.")
+
+    st.divider()
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        st.subheader("Average Price by State")
+        avg_by_state = filtered.groupby("State")["price"].mean().sort_values(ascending=False)
+        st.bar_chart(avg_by_state)
+    with col_c2:
+        st.subheader("Price Distribution")
+        price_bins = pd.cut(filtered["price"], bins=10)
+        dist_counts = price_bins.value_counts().sort_index()
+        # Altair/vega-lite can't serialise pandas Interval objects directly,
+        # so convert the bin labels to plain strings before charting.
+        dist_counts.index = dist_counts.index.astype(str)
+        st.bar_chart(dist_counts)
+
+# =====================================================================
+# PAGE 2 - PRICE PREDICTOR (analogous to "Single Day Prediction" page)
+# =====================================================================
+with tab_predict:
+    st.subheader("Condominium Price: Single Listing Prediction")
+    st.caption(
+        "Fill in the property details below, or use the *(Optional) Autofill "
+        "from an Existing Listing* control to load a real sample listing, "
+        "then click **Predict**."
+    )
+
+    # ---- Autofill control (same idea as the reference app's date-based autofill) ----
+    with st.container(border=True):
+        st.markdown("**(Optional) Autofill Data from an Existing Listing**")
+        col_a1, col_a2 = st.columns([3, 1])
+        with col_a1:
+            listing_idx = st.selectbox(
+                "Choose a sample listing (State - Property Type - Size)",
+                options=list(sample_df.index),
+                format_func=lambda i: (
+                    f"#{i}: {sample_df.loc[i, 'State']} - "
+                    f"{sample_df.loc[i, 'Property Type']} - "
+                    f"{sample_df.loc[i, 'Property Size']:.0f} sqft"
+                ),
+            )
+        with col_a2:
+            st.write("")
+            st.write("")
+            autofill_clicked = st.button("Set", width="stretch")
+
+    if autofill_clicked:
+        st.session_state["autofill_row"] = sample_df.loc[listing_idx].to_dict()
+        st.success("Input complete! Fields below have been autofilled.")
+
+    prefill = st.session_state.get("autofill_row", {})
+
+    def pf(col, default):
+        val = prefill.get(col, default)
+        return default if (val is None or (isinstance(val, float) and np.isnan(val))) else val
+
+    st.markdown("#### Property Details")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        bedroom = st.number_input("Bedrooms", 0, 10, int(pf("Bedroom", 3)))
+        completion_year = st.number_input("Completion Year", 1980, 2030, int(pf("Completion Year", 2015)))
+    with col2:
+        bathroom = st.number_input("Bathrooms", 0, 10, int(pf("Bathroom", 2)))
+        floors = st.number_input("# of Floors (building)", 0, 100, int(pf("# of Floors", 20)))
+    with col3:
+        size = st.number_input("Property Size (sq.ft.)", 100, 5000, int(pf("Property Size", 1000)))
+        total_units = st.number_input("Total Units", 0, 3000, int(pf("Total Units", 500)))
+    with col4:
+        parking = st.number_input("Parking Lots", 0, 10, int(pf("Parking Lot", 1)))
+        tenure = st.selectbox("Tenure Type", ["Freehold", "Leasehold"],
+                               index=["Freehold", "Leasehold"].index(pf("Tenure Type", "Freehold")))
+
+    col5, col6, col7, col8 = st.columns(4)
+    with col5:
+        prop_options = PROPERTY_TYPES
+        default_pt = pf("Property Type", "Condominium")
+        pt_index = prop_options.index(default_pt) if default_pt in prop_options else 1
+        property_type = st.selectbox("Property Type", prop_options, index=pt_index)
+    with col6:
+        state_options = STATE_OPTIONS
+        default_state = pf("State", "Selangor")
+        st_index = state_options.index(default_state) if default_state in state_options else 0
+        state = st.selectbox("State", state_options, index=st_index)
+    with col7:
+        land_options = ["Non Bumi Lot", "Bumi Lot", "Malay Reserved"]
+        default_land = pf("Land Title", "Non Bumi Lot")
+        lt_index = land_options.index(default_land) if default_land in land_options else 0
+        land_title = st.selectbox("Land Title", land_options, index=lt_index)
+    with col8:
+        floor_options = ["Low", "Medium", "High", "-"]
+        default_floor = pf("Floor Range", "-")
+        fr_index = floor_options.index(default_floor) if default_floor in floor_options else 3
+        floor_range = st.selectbox("Floor Range", floor_options, index=fr_index)
+
+    st.markdown("#### Facilities & Nearby Amenities")
+    default_facilities = [f for f in FACILITY_OPTIONS if prefill.get(f"Facility_{f}") == 1]
+    default_nearby = [n for n in NEARBY_OPTIONS if prefill.get(f"Has_{n}") == 1]
+
+    col_fac, col_near = st.columns(2)
+    with col_fac:
+        facilities = st.multiselect("Facilities available", FACILITY_OPTIONS, default=default_facilities)
+    with col_near:
+        nearby = st.multiselect(
+            "Nearby amenities",
+            NEARBY_OPTIONS, default=default_nearby,
+            format_func=lambda x: x.replace("_", " "),
+        )
+
+    col_predict, col_reset = st.columns([1, 1])
+    predict_clicked = col_predict.button("🔍 Predict", type="primary", width="stretch")
+    reset_clicked = col_reset.button("↺ Reset", width="stretch")
+
+    if reset_clicked:
+        st.session_state.pop("autofill_row", None)
+        st.rerun()
+
+    if predict_clicked:
+        row = {col: 0 for col in feature_columns}
+        row["Bedroom"] = bedroom
+        row["Bathroom"] = bathroom
+        row["Property Size"] = size
+        row["# of Floors"] = floors
+        row["Total Units"] = total_units
+        row["Parking Lot"] = parking
+        row["Completion Year"] = completion_year
+
+        for f in facilities:
+            key = f"Facility_{f}"
+            if key in row:
+                row[key] = 1
+        for n in nearby:
+            key = f"Has_{n}"
+            if key in row:
+                row[key] = 1
+        for key in [
+            f"Tenure Type_{tenure}", f"Property Type_{property_type}",
+            f"Floor Range_{floor_range}", f"Land Title_{land_title}",
+            f"State_{state}",
+        ]:
+            if key in row:
+                row[key] = True
+
+        X_input = pd.DataFrame([row])[feature_columns]
+        X_scaled = scaler.transform(X_input)
+        prediction = model.predict(X_scaled)[0]
+
+        st.success(f"💰 Predicted price: **RM {prediction:,.0f}**")
+        if "price" in prefill and prefill.get("price") is not None and not (
+            isinstance(prefill.get("price"), float) and np.isnan(prefill.get("price"))
+        ):
+            st.caption(f"Actual price of the autofilled listing: RM {prefill['price']:,.0f}")
+        st.caption(
+            "This is an indicative estimate from the trained model and should "
+            "not be used as the sole basis for financial decisions."
+        )
+
+st.divider()
+st.caption(
+    "Model: best of {KNN, Decision Tree, Random Forest, MLP Regressor} "
+    "selected automatically by lowest test-set RMSE in ds_assignment.py."
+)
