@@ -1,24 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-streamlit_app.py
-Deployment prototype for the BMDS2003 Data Science group assignment.
-Dataset: Malaysian Condominium Prices ("houses.csv")
-
-Layout mirrors a typical two-page trading/prediction dashboard:
-    - "Market Overview"  : browse cleaned listing data and charts
-    - "Price Predictor"  : single-listing prediction form, with an
-                            "autofill from an existing listing" control
-                            (same idea as picking a date to autofill a
-                            single-day prediction form)
-
-Run locally with:
-    streamlit run streamlit_app.py
-
-Requires (produced by ds_assignment.py):
-    best_model.pkl, scaler.pkl, feature_columns.pkl,
-    all_results.pkl, app_sample_listings.csv
-"""
-
 import pickle
 from pathlib import Path
 
