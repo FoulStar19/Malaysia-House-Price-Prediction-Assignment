@@ -14,7 +14,10 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import (
+    mean_squared_error, mean_absolute_error, r2_score,
+    confusion_matrix, accuracy_score, precision_score, recall_score, f1_score,
+)
 
 sns.set()
 pd.set_option('display.max_columns', None)
@@ -216,9 +219,13 @@ X_val_scaled = scaler.transform(X_val)
 X_test_scaled = scaler.transform(X_test)
 
 
+test_predictions = {}  # model name -> predicted values on X_test, filled in by evaluate()
+
+
 def evaluate(name, model, X_te, y_te):
     """Common evaluation routine (Practical 6c metrics)."""
     preds = model.predict(X_te)
+    test_predictions[name] = preds
     mse = mean_squared_error(y_te, preds)
     rmse = np.sqrt(mse)
     mae = mean_absolute_error(y_te, preds)
@@ -315,6 +322,57 @@ plt.tight_layout()
 plt.savefig(SCRIPT_DIR / "actual_vs_predicted.png", dpi=120)
 plt.show()
 
+
+# ---------------------------------------------------------------------
+# Extra artifacts for the "Model Comparison" tab in the Streamlit app:
+# residual boxplot data, actual-vs-predicted distributions, and a
+# price-bracket classification view (accuracy / precision / recall /
+# confusion matrix). Note: the underlying task is regression (price is
+# continuous), so RMSE/MAE/R2 above are the real performance metrics.
+# Accuracy/precision/recall/confusion matrix aren't natively defined for
+# regression, so here they're computed by bucketing price into quartile
+# brackets (Budget/Mid-range/High-end/Premium) and treating "did the
+# model land in the right bracket?" as a classification problem — a
+# common, easy-to-communicate way to show this alongside RMSE/MAE/R2.
+# ---------------------------------------------------------------------
+price_bin_edges = list(
+    pd.qcut(y_train, q=4, retbins=True, duplicates="drop")[1]
+)
+price_bin_edges[0] = -np.inf
+price_bin_edges[-1] = np.inf
+price_bin_labels = ["Budget", "Mid-range", "High-end", "Premium"][: len(price_bin_edges) - 1]
+
+y_test_bracket = pd.cut(y_test, bins=price_bin_edges, labels=price_bin_labels)
+best_pred_bracket = pd.cut(best_preds, bins=price_bin_edges, labels=price_bin_labels)
+
+bracket_cm = confusion_matrix(y_test_bracket, best_pred_bracket, labels=price_bin_labels)
+bracket_accuracy = accuracy_score(y_test_bracket, best_pred_bracket)
+bracket_precision = precision_score(y_test_bracket, best_pred_bracket,
+                                     labels=price_bin_labels, average="macro", zero_division=0)
+bracket_recall = recall_score(y_test_bracket, best_pred_bracket,
+                               labels=price_bin_labels, average="macro", zero_division=0)
+bracket_f1 = f1_score(y_test_bracket, best_pred_bracket,
+                       labels=price_bin_labels, average="macro", zero_division=0)
+
+print(f"\nPrice-bracket classification view for best model ({best_row['Model']}):")
+print(f"Accuracy={bracket_accuracy:.4f}  Precision(macro)={bracket_precision:.4f}  "
+      f"Recall(macro)={bracket_recall:.4f}  F1(macro)={bracket_f1:.4f}")
+
+extra_artifacts = {
+    "best_model_name": best_row["Model"],
+    "y_test": y_test.reset_index(drop=True),
+    "test_predictions": {name: np.asarray(preds) for name, preds in test_predictions.items()},
+    "price_bin_edges": price_bin_edges,
+    "price_bin_labels": price_bin_labels,
+    "bracket_confusion_matrix": bracket_cm,
+    "bracket_accuracy": bracket_accuracy,
+    "bracket_precision": bracket_precision,
+    "bracket_recall": bracket_recall,
+    "bracket_f1": bracket_f1,
+}
+with open(SCRIPT_DIR / "extra_artifacts.pkl", "wb") as f:
+    pickle.dump(extra_artifacts, f)
+
 with open(SCRIPT_DIR / "best_model.pkl", "wb") as f:
     pickle.dump(best_model, f)
 with open(SCRIPT_DIR / "scaler.pkl", "wb") as f:
@@ -337,4 +395,4 @@ app_sample = df[readable_cols + facility_cols + has_cols].sample(
 app_sample.to_csv(SCRIPT_DIR / "app_sample_listings.csv", index=False)
 
 print("\nSaved best_model.pkl, scaler.pkl, feature_columns.pkl, "
-      "all_results.pkl, app_sample_listings.csv for deployment.")
+      "all_results.pkl, extra_artifacts.pkl, app_sample_listings.csv for deployment.")
