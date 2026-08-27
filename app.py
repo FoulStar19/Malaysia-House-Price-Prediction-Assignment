@@ -231,16 +231,33 @@ with tab_compare:
 
         st.divider()
         st.markdown("#### Price-Bracket Classification View")
+        n_brackets = len(extra["price_bin_labels"])
         st.caption(
             "Price is a continuous value, so RMSE / MAE / R² above are the "
             "real regression metrics — accuracy, precision, recall, and a "
             "confusion matrix aren't natively defined for regression. To "
-            "still show them, test-set prices are grouped into quartile "
+            f"still show them, test-set prices are grouped into {n_brackets} "
             f"brackets ({', '.join(extra['price_bin_labels'])}) and the "
-            f"question becomes: *did {best_name} predict the right price "
-            "bracket?*"
+            "question becomes: *did the model predict the right price "
+            "bracket?* (Same bracket definition is used for every model "
+            "below, so they're directly comparable.)"
         )
 
+        if "bracket_results_all_models" in extra:
+            bracket_df = extra["bracket_results_all_models"].set_index("Model")
+            st.markdown("**All models — bracket classification metrics**")
+            st.dataframe(
+                bracket_df.style.format("{:.1%}").background_gradient(
+                    cmap="Greens", vmin=0, vmax=1
+                ),
+                width="stretch",
+            )
+            st.caption(
+                "🎯 Target: 70% on all four metrics for the best model "
+                f"({best_name}), highlighted below."
+            )
+
+        st.markdown(f"**Best model — {best_name}**")
         pa1, pa2, pa3, pa4 = st.columns(4)
         pa1.metric("Accuracy", f"{extra['bracket_accuracy']:.1%}")
         pa2.metric("Precision (macro)", f"{extra['bracket_precision']:.1%}")
