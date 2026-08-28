@@ -482,7 +482,7 @@ with open(SCRIPT_DIR / "all_results.pkl", "wb") as f:
 readable_cols = [
     "Bedroom", "Bathroom", "Property Size", "# of Floors", "Total Units",
     "Parking Lot", "Completion Year", "Tenure Type", "Property Type",
-    "Floor Range", "Land Title", "State", "price",
+    "Floor Range", "Land Title", "State", "City", "price",
 ]
 facility_cols = [c for c in df.columns if c.startswith("Facility_")]
 has_cols = [c for c in df.columns if c.startswith("Has_")]
