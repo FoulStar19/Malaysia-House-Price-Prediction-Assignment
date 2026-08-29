@@ -1,22 +1,3 @@
-"""
-BMDS2003 Data Science project backend
--------------------------------------
-Streamlit-only architecture: no FastAPI, no Uvicorn, no external API.
-
-The module:
-- cleans and prepares houses.csv
-- reports missing values and IQR outliers
-- performs a train/test split before learned preprocessing
-- tunes FOUR regression models with GridSearchCV
-- treats Decision Tree as the baseline model
-- evaluates RMSE, MAE and R2 on a held-out test set
-- exposes model comparison, diagnostics and prediction helpers to app.py
-
-The preprocessing is placed inside sklearn Pipelines so imputation,
-scaling and one-hot encoding are fitted only on training folds, helping
-avoid data leakage during cross-validation.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -56,13 +37,15 @@ DATA_FILE = BASE_DIR / "houses.csv"
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
-CV_FOLDS = 2
+CV_FOLDS = 5
 
 # Practical 4 hard bounds for houses.csv (df_filtered step):
 # (price_numeric > 50000) & (price_numeric < 2000000) & (size_numeric < 4000)
 PRICE_LOWER_BOUND = 50_000
 PRICE_UPPER_BOUND = 2_000_000
 SIZE_UPPER_BOUND = 4_000
+PROPERTY_REFERENCE_YEAR = 2026
+MISSING_TOKENS = {"", "-", "--", "n/a", "na", "nan", "null", "none", "not available", "unknown"}
 
 STATE_OPTIONS = [
     "Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan",
@@ -111,6 +94,7 @@ NEARBY_OPTIONS = [
 NUMERIC_FEATURES = [
     "Bedroom", "Bathroom", "Property Size", "# of Floors",
     "Total Units", "Parking Lot", "Completion Year",
+    "Property Age", "Size per Bedroom", "Bathrooms per Bedroom", "Parking per Bedroom",
 ]
 
 CATEGORICAL_FEATURES = [
@@ -147,61 +131,83 @@ class Artifacts:
     data_quality: dict
 
 
-# --- Practical 4 (Social Media / houses.csv demo): clean_numeric() ---
-# Strips a known unit string (e.g. "RM", "SQ.FT."), then keeps only the
-# digit characters and joins them back into a number. This is the exact
-# technique used in class for the "price" and "Property Size" columns,
-# which both store their unit inline with the number (e.g. "RM 340,000",
-# "1,000 SQ.FT.").
-def _clean_numeric(value, remove_str):
+# --- Data cleaning helpers -------------------------------------------------
+# The raw CSV stores several numeric fields as text and uses "-" as a
+# missing-value marker.  We normalise these values to NaN first so that the
+# sklearn pipeline can learn imputations from training folds only.
+def _is_missing_token(value):
     if pd.isna(value):
+        return True
+    return str(value).strip().lower() in MISSING_TOKENS
+
+
+def _clean_numeric(value, remove_str=None):
+    if _is_missing_token(value):
         return np.nan
-    val_str = (
-        str(value)
-        .upper()
-        .replace(remove_str.upper(), "")
-        .replace(" ", "")
-        .replace(",", "")
-    )
-    num = "".join(filter(str.isdigit, val_str))
-    return float(num) if num else np.nan
+
+    text = str(value).strip().upper()
+    if remove_str:
+        text = text.replace(remove_str.upper(), "")
+    text = text.replace(",", "").replace(" ", "")
+
+    # Support common shorthand such as 1.2M / 850K while preserving decimals.
+    multiplier = 1.0
+    if text.endswith("M"):
+        multiplier, text = 1_000_000.0, text[:-1]
+    elif text.endswith("K"):
+        multiplier, text = 1_000.0, text[:-1]
+
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", text)
+    if not match:
+        return np.nan
+    return float(match.group()) * multiplier
 
 
 def _clean_price(value):
-    """Parse prices such as 'RM 340,000' using the clean_numeric approach."""
     return _clean_numeric(value, "RM")
 
 
 def _clean_property_size(value):
-    """Parse sizes such as '1,000 SQ.FT.' using the clean_numeric approach."""
     return _clean_numeric(value, "SQ.FT.")
 
 
 def _normalise_text(value):
-    if pd.isna(value):
-        return "-"
-    text = str(value).strip()
-    return text if text else "-"
+    if _is_missing_token(value):
+        return np.nan
+    return str(value).strip()
 
 
-# --- Practical 4: extract_state() ---
-# The practical only checks the last comma-separated segment of the address
-# against a short, explicit list of states (the ones that dominate the
-# dataset). Anything else falls back to "Other".
-PRACTICAL_STATES = ["Kuala Lumpur", "Selangor", "Penang", "Johor", "Sabah"]
+def _coerce_numeric(df, columns, bounds=None):
+    """Convert numeric columns and turn implausible values into NaN.
+
+    We do not delete rows for missing predictor values: those are learned by
+    the training pipeline's imputer.  Only impossible values are marked NaN.
+    """
+    bounds = bounds or {}
+    for col in columns:
+        df[col] = df[col].map(_clean_numeric)
+        if col in bounds:
+            low, high = bounds[col]
+            bad = df[col].notna() & ((df[col] < low) | (df[col] > high))
+            df.loc[bad, col] = np.nan
+    return df
 
 
 def _extract_state(address):
-    if pd.isna(address):
+    if _is_missing_token(address):
         return "Other"
 
-    state_segment = str(address).split(",")[-1].strip()
-    for state in PRACTICAL_STATES:
-        if state.lower() in state_segment.lower():
+    text = str(address).strip()
+    # Longest names first avoids partial matches.
+    states = sorted(STATE_OPTIONS[:-1], key=len, reverse=True)
+    for state in states:
+        if re.search(rf"(?<![A-Za-z]){re.escape(state)}(?![A-Za-z])", text, re.I):
             return state
 
+    # A few common address spellings.
+    if re.search(r"Kuala\s+Lumpur|W.P.\s*Kuala\s+Lumpur", text, re.I):
+        return "Kuala Lumpur"
     return "Other"
-
 
 def _extract_city(address, state):
     if pd.isna(address):
@@ -243,7 +249,6 @@ def _prepare_data():
         )
 
     raw = pd.read_csv(DATA_FILE)
-
     missing_columns = [c for c in REQUIRED_COLUMNS if c not in raw.columns]
     if missing_columns:
         raise ValueError(
@@ -253,15 +258,41 @@ def _prepare_data():
     df = raw.copy()
     original_rows = len(df)
 
-    # Practical 4 also cleans Bedroom / Bathroom / Completion Year with
-    # pd.to_numeric(..., errors="coerce"), since those columns don't carry
-    # an embedded unit string and just need non-numeric text turned into NaN.
-    plain_numeric_cols = [c for c in NUMERIC_FEATURES if c != "Property Size"]
-    for col in plain_numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    duplicate_rows = int(df.duplicated().sum())
+    df = df.drop_duplicates().copy()
+    rows_after_duplicates = len(df)
 
+    quality_columns = list(dict.fromkeys(REQUIRED_COLUMNS + [c for c in NUMERIC_FEATURES if c not in {"Property Age", "Size per Bedroom", "Bathrooms per Bedroom", "Parking per Bedroom"}] + ["price"]))
+    raw_missing_summary = raw[quality_columns].isna().sum().sort_values(ascending=False)
+    raw_placeholder_summary = {
+        col: int(raw[col].map(_is_missing_token).sum())
+        for col in raw.columns
+        if raw[col].dtype == "object"
+    }
+
+    # Numeric cleaning.  Placeholder strings become NaN, and impossible
+    # values are also converted to NaN rather than silently retained.
+    numeric_bounds = {
+        "Bedroom": (0, 20),
+        "Bathroom": (0, 20),
+        "# of Floors": (1, 200),
+        "Total Units": (1, 20_000),
+        "Parking Lot": (0, 20),
+        "Completion Year": (1800, PROPERTY_REFERENCE_YEAR + 2),
+    }
+    plain_numeric_cols = ["Bedroom", "Bathroom", "# of Floors", "Total Units", "Parking Lot", "Completion Year"]
+    df = _coerce_numeric(df, plain_numeric_cols, numeric_bounds)
     df["Property Size"] = df["Property Size"].map(_clean_property_size)
     df["price"] = df["price"].map(_clean_price)
+
+    # Property size is constrained to a plausible range, while target and
+    # size rows are removed only when they cannot be used for regression.
+    df.loc[(df["Property Size"] <= 0) | (df["Property Size"] >= SIZE_UPPER_BOUND), "Property Size"] = np.nan
+    df.loc[(df["price"] <= PRICE_LOWER_BOUND) | (df["price"] >= PRICE_UPPER_BOUND), "price"] = np.nan
+
+    # Normalise categorical text and treat placeholders as true missingness.
+    for col in ["Floor Range", "Tenure Type", "Property Type", "Land Title"]:
+        df[col] = df[col].map(_normalise_text)
 
     df["State"] = df["Address"].map(_extract_state)
     df["City"] = [
@@ -269,76 +300,41 @@ def _prepare_data():
         for address, state in zip(df["Address"], df["State"])
     ]
 
-    for col in ["Floor Range", "Tenure Type", "Property Type", "Land Title"]:
-        df[col] = df[col].map(_normalise_text)
-
-    # Practical 4 filters houses.csv down with these exact hard bounds
-    # before analysis/modelling:
-    #   (price_numeric > 50000) & (price_numeric < 2000000) & (size_numeric < 4000)
-    # followed by dropna() on the two columns. Rows without a valid target
-    # or size can't be used for supervised regression either way.
-    invalid_target = (
-        df["price"].isna() | (df["price"] <= PRICE_LOWER_BOUND) | (df["price"] >= PRICE_UPPER_BOUND)
-    )
-    invalid_size = df["Property Size"].isna() | (df["Property Size"] >= SIZE_UPPER_BOUND)
-
+    invalid_target = df["price"].isna()
+    invalid_size = df["Property Size"].isna()
     removed_invalid_target = int(invalid_target.sum())
     removed_invalid_size = int((~invalid_target & invalid_size).sum())
-
     df = df.loc[~invalid_target & ~invalid_size].copy()
 
-    # Preserve the raw missingness information for the report/dashboard.
-    missing_summary = (
-        df[NUMERIC_FEATURES + ["price"]]
-        .isna()
-        .sum()
-        .sort_values(ascending=False)
-    )
-
-    # Missing values are NOT filled here. The sklearn preprocessing pipeline
-    # learns medians from training folds only.
+    # Facility text is converted to binary presence/absence indicators.
     for facility in FACILITY_OPTIONS:
         pattern = re.escape(facility)
         df[f"Facility_{facility}"] = (
-            df["Facilities"]
-            .fillna("")
-            .astype(str)
-            .str.contains(pattern, case=False, regex=True)
-            .astype(int)
+            df["Facilities"].fillna("").astype(str).str.contains(pattern, case=False, regex=True).astype(int)
         )
 
-    nearby_source = {
-        "Bus Stop": "Bus Stop",
-        "Mall": "Mall",
-        "Park": "Park",
-        "School": "School",
-        "Hospital": "Hospital",
-        "Highway": "Highway",
-        "Nearby Railway Station": "Nearby Railway Station",
-        "Railway Station": "Railway Station",
-    }
-
+    nearby_source = {name: name for name in NEARBY_OPTIONS}
     for label, source_col in nearby_source.items():
-        if source_col in df.columns:
-            df[f"Has_{label}"] = df[source_col].notna().astype(int)
-        else:
-            df[f"Has_{label}"] = 0
+        df[f"Has_{label}"] = df[source_col].notna().astype(int) if source_col in df.columns else 0
 
-    # Report IQR outliers, but do not automatically delete legitimate
-    # high-value properties. This keeps unusual but valid homes in the model.
+    # Derived features are calculated after cleaning.  They are also recreated
+    # in build_feature_row() for live predictions, so training and inference match.
+    df["Property Age"] = (PROPERTY_REFERENCE_YEAR - df["Completion Year"]).clip(lower=0)
+    df["Size per Bedroom"] = df["Property Size"] / df["Bedroom"].replace(0, np.nan)
+    df["Bathrooms per Bedroom"] = df["Bathroom"] / df["Bedroom"].replace(0, np.nan)
+    df["Parking per Bedroom"] = df["Parking Lot"] / df["Bedroom"].replace(0, np.nan)
+
+    # Report IQR outliers for transparency.  Legitimate expensive/large homes
+    # are not automatically deleted merely because they are statistical outliers.
     outlier_summary = {}
-    for col in NUMERIC_FEATURES + ["price"]:
+    for col in ["Bedroom", "Bathroom", "Property Size", "# of Floors", "Total Units", "Parking Lot", "Completion Year", "Property Age", "Size per Bedroom", "Bathrooms per Bedroom", "Parking per Bedroom", "price"]:
         s = df[col].dropna()
         if len(s) == 0:
-            outlier_summary[col] = {
-                "lower_bound": None, "upper_bound": None, "count": 0, "percentage": 0.0
-            }
+            outlier_summary[col] = {"lower_bound": None, "upper_bound": None, "count": 0, "percentage": 0.0}
             continue
-        q1 = float(s.quantile(0.25))
-        q3 = float(s.quantile(0.75))
+        q1, q3 = float(s.quantile(0.25)), float(s.quantile(0.75))
         iqr = q3 - q1
-        lower = q1 - 1.5 * iqr
-        upper = q3 + 1.5 * iqr
+        lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
         mask = (s < lower) | (s > upper)
         outlier_summary[col] = {
             "lower_bound": lower,
@@ -347,38 +343,50 @@ def _prepare_data():
             "percentage": float(mask.mean() * 100),
         }
 
-    # Human-readable sample table.
     sample_cols = [
-        "Bedroom", "Bathroom", "Property Size", "Property Type",
-        "Tenure Type", "State", "City", "price", "Floor Range",
-        "Land Title", "Parking Lot", "Completion Year", "# of Floors",
-        "Total Units", "Facilities",
+        "Bedroom", "Bathroom", "Property Size", "Property Type", "Tenure Type",
+        "State", "City", "price", "Floor Range", "Land Title", "Parking Lot",
+        "Completion Year", "# of Floors", "Total Units", "Facilities",
     ]
     sample_df = df[sample_cols].copy()
 
-    # Feature columns before preprocessing are kept stable for the UI.
-    feature_df = df[NUMERIC_FEATURES + CATEGORICAL_FEATURES].copy()
-
-    binary_cols = (
-        [f"Facility_{f}" for f in FACILITY_OPTIONS]
-        + [f"Has_{n}" for n in NEARBY_OPTIONS]
+    location_validation = (
+        df[["Address", "State", "City"]]
+        .sample(n=min(5, len(df)), random_state=RANDOM_STATE)
+        .rename(columns={"Address": "Original Address", "State": "Extracted State", "City": "Extracted City"})
     )
+
+    feature_columns = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    binary_cols = [f"Facility_{f}" for f in FACILITY_OPTIONS] + [f"Has_{n}" for n in NEARBY_OPTIONS]
+    feature_df = df[feature_columns + binary_cols].copy()
     for col in binary_cols:
         feature_df[col] = df[col].astype(int)
 
     y = df["price"].astype(float)
+    missing_summary = df[quality_columns].isna().sum().sort_values(ascending=False)
 
     data_quality = {
         "original_rows": original_rows,
+        "rows_after_duplicates": rows_after_duplicates,
         "usable_rows": int(len(df)),
+        "duplicate_rows": duplicate_rows,
         "removed_invalid_target": removed_invalid_target,
         "removed_invalid_size": removed_invalid_size,
+        "raw_missing_summary": raw_missing_summary.to_dict(),
+        "raw_placeholder_summary": raw_placeholder_summary,
         "missing_summary": missing_summary.to_dict(),
         "outlier_summary": outlier_summary,
+        "location_validation": location_validation.to_dict("records"),
+        "cleaning_notes": [
+            "Converted '-', blank, N/A, NA, null and None placeholders to NaN.",
+            "Converted numeric text to numeric values and marked implausible numeric values as missing.",
+            "Used median imputation for numeric predictors and a dedicated Missing category for categorical predictors inside the training pipeline.",
+            "One-hot encoded categorical predictors with unknown categories ignored at prediction time.",
+            "Kept IQR outliers for legitimate properties while reporting them separately.",
+            "Extracted all Malaysian states rather than mapping most states to Other.",
+        ],
     }
-
     return df, sample_df, feature_df, y, data_quality
-
 
 def _make_brackets(y):
     """Create four quantile-based business price brackets."""
@@ -399,35 +407,28 @@ def _make_brackets(y):
 
 
 def _build_preprocessor():
+    binary_features = [f"Facility_{f}" for f in FACILITY_OPTIONS] + [f"Has_{n}" for n in NEARBY_OPTIONS]
     numeric_pipe = Pipeline(
         steps=[
-            ("imputer", SimpleImputer(strategy="median")),
+            ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
             ("scaler", StandardScaler()),
         ]
     )
-
     categorical_pipe = Pipeline(
         steps=[
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            (
-                "onehot",
-                OneHotEncoder(
-                    handle_unknown="ignore",
-                    sparse_output=False,
-                ),
-            ),
+            ("imputer", SimpleImputer(strategy="constant", fill_value="Missing")),
+            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
         ]
     )
-
     return ColumnTransformer(
         transformers=[
             ("numeric", numeric_pipe, NUMERIC_FEATURES),
             ("categorical", categorical_pipe, CATEGORICAL_FEATURES),
+            ("binary", "passthrough", binary_features),
         ],
-        remainder="passthrough",
+        remainder="drop",
         verbose_feature_names_out=False,
     )
-
 
 def _model_searches(preprocessor):
     """Return four assignment-ready tuned models.
@@ -460,7 +461,7 @@ def _model_searches(preprocessor):
             n_jobs=-1,
         ),
         {
-            "model__n_estimators": [100, 200],
+            "model__n_estimators": [100],
             "model__max_depth": [None, 15],
             "model__min_samples_leaf": [1, 2],
         },
@@ -468,7 +469,7 @@ def _model_searches(preprocessor):
 
     configs["MLP Regressor"] = (
         MLPRegressor(
-            max_iter=220,
+            max_iter=180,
             early_stopping=True,
             validation_fraction=0.15,
             random_state=RANDOM_STATE,
@@ -558,11 +559,11 @@ def load_artifacts():
             }
         )
 
-    results_df = pd.DataFrame(results).sort_values("RMSE").reset_index(drop=True)
+    results_df = pd.DataFrame(results).sort_values("CV RMSE").reset_index(drop=True)
     tuning_df = pd.DataFrame(tuning_rows)
 
-    # Winner for deployment is the lowest held-out test RMSE.
-    # The CV RMSE is retained so the report can discuss tuning separately.
+    # Select the deployment model using cross-validation only. The held-out
+    # test set remains an unbiased final evaluation set.
     best_name = str(results_df.iloc[0]["Model"])
     best_model = models[best_name]
 
@@ -706,6 +707,8 @@ def load_artifacts():
         "test_size": TEST_SIZE,
         "cv_folds": CV_FOLDS,
         "model_configs": tuning_df,
+        "selection_metric": "CV RMSE",
+        "data_cleaning": data_quality.get("cleaning_notes", []),
     }
 
     city_options = sorted(
@@ -750,6 +753,17 @@ def build_feature_row(payload):
 
     for key in NUMERIC_FEATURES:
         row[key] = values.get(key, np.nan)
+
+    # Keep live prediction features identical to the training representation.
+    bedroom = pd.to_numeric(pd.Series([row["Bedroom"]]), errors="coerce").iloc[0]
+    size = pd.to_numeric(pd.Series([row["Property Size"]]), errors="coerce").iloc[0]
+    bathroom = pd.to_numeric(pd.Series([row["Bathroom"]]), errors="coerce").iloc[0]
+    parking = pd.to_numeric(pd.Series([row["Parking Lot"]]), errors="coerce").iloc[0]
+    year = pd.to_numeric(pd.Series([row["Completion Year"]]), errors="coerce").iloc[0]
+    row["Property Age"] = PROPERTY_REFERENCE_YEAR - year if pd.notna(year) else np.nan
+    row["Size per Bedroom"] = size / bedroom if pd.notna(size) and pd.notna(bedroom) and bedroom > 0 else np.nan
+    row["Bathrooms per Bedroom"] = bathroom / bedroom if pd.notna(bathroom) and pd.notna(bedroom) and bedroom > 0 else np.nan
+    row["Parking per Bedroom"] = parking / bedroom if pd.notna(parking) and pd.notna(bedroom) and bedroom > 0 else np.nan
 
     for col in CATEGORICAL_FEATURES:
         row[col] = None
@@ -887,7 +901,7 @@ def get_state_summary():
 
 def get_model_comparison():
     art = load_artifacts()
-    results = art.results_df.reset_index(drop=True).sort_values("RMSE")
+    results = art.results_df.reset_index(drop=True).sort_values("CV RMSE")
     best_name = art.extra["best_model_name"]
     best_row = results[results["Model"] == best_name].iloc[0]
 
@@ -963,9 +977,17 @@ def get_data_quality():
 
     return {
         "original_rows": art.data_quality["original_rows"],
+        "rows_after_duplicates": art.data_quality["rows_after_duplicates"],
         "usable_rows": art.data_quality["usable_rows"],
+        "duplicate_rows": art.data_quality["duplicate_rows"],
         "removed_invalid_target": art.data_quality["removed_invalid_target"],
         "removed_invalid_size": art.data_quality["removed_invalid_size"],
+        "raw_missing_summary": [
+            {"Column": col, "Missing Values": count}
+            for col, count in art.data_quality["raw_missing_summary"].items()
+        ],
         "missing_summary": missing.to_dict("records"),
         "outlier_summary": outliers.to_dict("records"),
+        "location_validation": art.data_quality["location_validation"],
+        "cleaning_notes": art.data_quality.get("cleaning_notes", []),
     }

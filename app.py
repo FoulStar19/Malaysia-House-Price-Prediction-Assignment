@@ -20,10 +20,12 @@ PALETTE = ["#22C55E", "#3B82F6", "#F59E0B", "#EC4899", "#8B5CF6", "#06B6D4"]
 CARD_COLORS = ["#22C55E", "#3B82F6", "#F59E0B", "#EC4899"]
 
 PLOTLY_LAYOUT = dict(
-    template="plotly_dark",
+    template="plotly_white",
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(size=12),
+    font=dict(size=12, color="#24304A"),
+    xaxis=dict(gridcolor="rgba(109,74,255,.10)", zerolinecolor="rgba(109,74,255,.15)"),
+    yaxis=dict(gridcolor="rgba(109,74,255,.10)", zerolinecolor="rgba(109,74,255,.15)"),
     margin=dict(l=10, r=10, t=45, b=10),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
 )
@@ -45,7 +47,7 @@ st.markdown(
     """
     <style>
       .block-container {
-          padding-top: 1.1rem;
+          padding-top: 1.4rem;
           padding-bottom: 2rem;
           max-width: 1200px;
       }
@@ -58,6 +60,29 @@ st.markdown(
       div[data-testid="stExpander"] { margin: 0.7rem 0; }
       div[data-testid="stDataFrame"] { margin-top: 0.4rem; margin-bottom: 0.6rem; }
       div[data-testid="stPlotlyChart"] { margin-top: 0.3rem; margin-bottom: 0.6rem; }
+      [data-testid="stAppViewContainer"] {
+          background: radial-gradient(circle at 4% 0%, rgba(255,191,105,.25), transparent 28%),
+                      radial-gradient(circle at 95% 10%, rgba(255,122,184,.20), transparent 26%),
+                      radial-gradient(circle at 65% 70%, rgba(104,219,205,.16), transparent 34%),
+                      #fff9f5;
+      }
+      div[data-testid="stNumberInput"] input,
+      div[data-baseweb="select"] > div {
+          border-radius: 14px !important;
+          border-color: rgba(109,74,255,.20) !important;
+          background: #ffffff !important;
+          box-shadow: 0 8px 20px -18px rgba(45,34,89,.45) !important;
+      }
+      div[data-testid="stButton"] button {
+          border-radius: 14px !important;
+          min-height: 42px;
+          font-weight: 700 !important;
+          transition: transform .16s ease, box-shadow .16s ease !important;
+      }
+      div[data-testid="stButton"] button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 14px 28px -16px rgba(109,74,255,.75) !important;
+      }
 
       /* Colourful tab bar */
       button[data-baseweb="tab"] {
@@ -69,10 +94,34 @@ st.markdown(
           background: linear-gradient(90deg,#22C55E,#3B82F6,#F59E0B,#EC4899) !important;
           height: 3px !important;
       }
+      button[data-baseweb="tab"][aria-selected="true"] {
+          background: #f0ebff !important;
+      }
 
       /* Pills / multiselect chips get a splash of colour */
       span[data-baseweb="tag"] {
-          background: linear-gradient(135deg,#3B82F6,#8B5CF6) !important;
+          background: linear-gradient(135deg,#7c5cff,#ff72ad) !important;
+      }
+      [data-testid="stPills"] button {
+          border-radius: 999px !important;
+          border: 1px solid rgba(109,74,255,.20) !important;
+          background: #ffffff !important;
+          color: #4c3a85 !important;
+          font-weight: 700 !important;
+          box-shadow: 0 7px 14px -13px rgba(58,40,130,.65) !important;
+      }
+      [data-testid="stPills"] button[aria-pressed="true"] {
+          border-color: transparent !important;
+          background: linear-gradient(135deg,#6d4aff,#ff5ca8) !important;
+          color: #ffffff !important;
+          box-shadow: 0 10px 18px -12px rgba(109,74,255,.75) !important;
+      }
+      [data-testid="stPlotlyChart"], div[data-testid="stDataFrame"] {
+          background: rgba(255,255,255,.74);
+          border: 1px solid rgba(109,74,255,.12);
+          border-radius: 18px;
+          padding: 8px;
+          box-shadow: 0 18px 34px -30px rgba(45,34,89,.55);
       }
 
       /* Compact metric cards */
@@ -80,8 +129,8 @@ st.markdown(
           border-radius: 14px;
           padding: 14px 14px;
           text-align: center;
-          color: white;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+          color: #24304a;
+          box-shadow: 0 15px 28px -23px rgba(45,34,89,.5);
           margin-bottom: 0.9rem;
           margin-top: 0.2rem;
       }
@@ -105,11 +154,22 @@ st.markdown(
 
       div[data-testid="stExpander"] {
           border-radius: 12px !important;
-          border: 1px solid rgba(139,92,246,0.35) !important;
+          border: 1px solid rgba(109,74,255,0.20) !important;
+          background: rgba(255,255,255,.82) !important;
       }
       div[data-testid="stContainer"]:has(> div > div > div[data-testid="stMarkdownContainer"]) {
           border-radius: 14px;
       }
+      .app-hero {
+          position: relative; overflow:hidden; border-radius: 24px; padding: 24px 26px;
+          margin: 6px 0 18px; border: 1px solid rgba(147,197,253,.28);
+          background: linear-gradient(118deg,#fff5c7 0%,#ffe4f0 38%,#e4f6ff 70%,#dcfff0 100%);
+          box-shadow: 0 25px 52px -33px rgba(109,74,255,.45);
+      }
+      .app-hero:after { content:""; position:absolute; width:220px; height:220px; border-radius:50%; right:-60px; top:-110px; background:rgba(255,255,255,.70); filter:blur(5px); }
+      .hero-kicker { color:#7c3aed; font-weight:800; font-size:11px; letter-spacing:.16em; text-transform:uppercase; }
+      .hero-title { font-size:clamp(27px,4vw,42px); font-weight:900; margin:6px 0; letter-spacing:-.04em; }
+      .hero-copy { max-width:640px; opacity:.82; font-size:15px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -295,6 +355,9 @@ def safe_float(value, default):
 # ---------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------
+
+st.divider()
+
 st.markdown(
     """
     <div class="app-header">
@@ -308,23 +371,23 @@ st.markdown(
 
     <style>
       .app-header {
-        background: linear-gradient(120deg, rgba(34,197,94,.16), rgba(59,130,246,.16) 45%, rgba(236,72,153,.16));
-        border: 1px solid rgba(139,92,246,.35);
-        border-radius: 16px;
-        padding: 14px 20px;
+        background: #ffffff;
+        border: 1px solid rgba(109,74,255,.16);
+        border-radius: 20px;
+        padding: 16px 22px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 16px;
       }
       .app-title {
-        font-size: 23px;
-        font-weight: 800;
-        background: linear-gradient(90deg,#22C55E,#3B82F6,#EC4899);
+        font-size: 25px;
+        font-weight: 900;
+        background: linear-gradient(90deg,#6D4AFF,#FF5CA8,#FF9D36);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
       }
-      .app-subtitle { opacity: .7; font-size: 13px; margin-top: 2px; }
+      .app-subtitle { color:#64748b; font-size: 13px; margin-top: 2px; }
       .app-badge {
         font-size: 12px;
         font-weight: 600;
@@ -363,9 +426,20 @@ with tab_overview:
     ])
 
     st.caption(
-        "Cleaned listings from houses.csv — rows without a valid positive "
-        "target or property size are excluded."
+        "Cleaning is documented below. Learned imputation and scaling are fitted "
+        "inside the training pipeline to avoid test-data leakage."
     )
+
+    flow = pd.DataFrame([
+        {"Step": "Raw source", "Rows": original_rows, "Action": "Read houses.csv"},
+        {"Step": "Duplicate check", "Rows": quality["rows_after_duplicates"],
+         "Action": f"Removed {quality['duplicate_rows']:,} exact duplicate row(s)"},
+        {"Step": "Validity filter", "Rows": usable_rows,
+         "Action": (f"Removed {quality['removed_invalid_target']:,} invalid prices and "
+                    f"{quality['removed_invalid_size']:,} invalid sizes")},
+    ])
+    with st.expander("🧹 Cleaning audit trail", expanded=True):
+        st.dataframe(flow, width="stretch", hide_index=True)
 
     st.divider()
 
@@ -412,22 +486,20 @@ with tab_overview:
     with col_c1:
         st.markdown("##### 💰 Average Price by State")
         if len(filtered):
-            avg_by_state = (
-                filtered.groupby("State")["price"]
-                .mean()
-                .sort_values(ascending=False)
-                .reset_index()
+            avg_by_state = (filtered.groupby("State")["price"].agg(["mean", "count"])
+                            .reset_index().sort_values("mean"))
+            avg_by_state["label"] = avg_by_state.apply(
+                lambda row: f"{row['State']} (n={int(row['count'])})", axis=1
             )
             fig = px.bar(
                 avg_by_state,
-                x="State",
-                y="price",
-                color="price",
-                color_continuous_scale=["#3B82F6", "#22C55E", "#F59E0B", "#EC4899"],
+                x="mean", y="label", orientation="h", text="mean",
+                color_discrete_sequence=["#3B82F6"],
             )
-            fig.update_layout(**PLOTLY_LAYOUT, height=280, coloraxis_showscale=False)
-            fig.update_yaxes(title="Avg. Price (RM)")
-            fig.update_xaxes(title=None)
+            fig.update_traces(texttemplate="RM %{text:,.0f}", textposition="outside")
+            fig.update_layout(**PLOTLY_LAYOUT, height=340, showlegend=False)
+            fig.update_xaxes(title="Average price (RM)")
+            fig.update_yaxes(title=None)
             st.plotly_chart(fig, width="stretch")
         else:
             st.info("No data for the selected filters.")
@@ -435,25 +507,26 @@ with tab_overview:
     with col_c2:
         st.markdown("##### 📊 Price Distribution")
         if len(filtered):
-            price_bins = pd.cut(filtered["price"], bins=10)
-            dist_counts = price_bins.value_counts().sort_index()
-            dist_df = pd.DataFrame({
-                "range": dist_counts.index.astype(str),
-                "count": dist_counts.values,
-            })
-            fig = px.bar(
-                dist_df,
-                x="range",
-                y="count",
-                color="count",
-                color_continuous_scale=["#8B5CF6", "#EC4899", "#F59E0B"],
-            )
-            fig.update_layout(**PLOTLY_LAYOUT, height=280, coloraxis_showscale=False)
+            fig = px.histogram(filtered, x="price", nbins=20,
+                               color_discrete_sequence=["#8B5CF6"])
+            fig.update_layout(**PLOTLY_LAYOUT, height=340, showlegend=False)
             fig.update_yaxes(title="Listings")
-            fig.update_xaxes(title=None, tickangle=30)
+            fig.update_xaxes(title="Property price (RM)")
             st.plotly_chart(fig, width="stretch")
         else:
             st.info("No data for the selected filters.")
+
+    st.markdown("##### 🔗 Price and property-size relationship")
+    if len(filtered):
+        fig = px.scatter(
+            filtered, x="Property Size", y="price", color="Property Type",
+            hover_data=["State", "Bedroom", "Bathroom"],
+            color_discrete_sequence=PALETTE,
+        )
+        fig.update_layout(**PLOTLY_LAYOUT, height=420,
+                          xaxis_title="Property size (sq. ft.)",
+                          yaxis_title="Property price (RM)")
+        st.plotly_chart(fig, width="stretch")
 
     st.divider()
 
@@ -462,18 +535,18 @@ with tab_overview:
     dq1, dq2 = st.columns(2)
 
     with dq1:
-        st.markdown("###### ❓ Missing Values")
-        missing_df = pd.DataFrame(quality["missing_summary"])
+        st.markdown("###### ❓ Missing values before / after filtering")
+        missing_df = pd.DataFrame(quality["raw_missing_summary"]).merge(
+            pd.DataFrame(quality["missing_summary"]), on="Column", how="outer",
+            suffixes=(" Before", " After"),
+        ).fillna(0)
         if len(missing_df):
-            missing_df = missing_df.sort_values(
-                "Missing Values",
-                ascending=False,
-            )
-            st.dataframe(
-                missing_df,
-                width="stretch",
-                hide_index=True,
-            )
+            missing_long = missing_df.melt(id_vars="Column", var_name="Stage", value_name="Missing Values")
+            fig = px.bar(missing_long, x="Missing Values", y="Column", color="Stage",
+                         barmode="group", orientation="h",
+                         color_discrete_map={"Missing Values Before": "#F59E0B", "Missing Values After": "#3B82F6"})
+            fig.update_layout(**PLOTLY_LAYOUT, height=420, yaxis_title=None)
+            st.plotly_chart(fig, width="stretch")
         else:
             st.info("No missing-value summary available.")
 
@@ -486,6 +559,11 @@ with tab_overview:
                 width="stretch",
                 hide_index=True,
             )
+            st.caption("IQR flags are reviewed, not automatically deleted: unusual high-value properties can be valid listings.")
+
+    with st.expander("📍 Address-to-location validation sample"):
+        st.caption("Derived State and City are checked against the original address; uncertain values remain explicit rather than guessed.")
+        st.dataframe(pd.DataFrame(quality["location_validation"]), width="stretch", hide_index=True)
 
 
 # =====================================================================
@@ -501,17 +579,10 @@ with tab_compare:
     baseline_name = comp["baseline_model_name"]
 
     diag = get_model_diagnostics()
-    bracket_df = pd.DataFrame(diag["bracket_results_all_models"])
-
-    # Merge the regression and supplementary classification metrics so that
-    # every model appears in ONE complete comparison table.
-    if len(bracket_df):
-        results_df = results_df.merge(bracket_df, on="Model", how="left")
-
     st.caption(
         "Four regression models compared on the same held-out test set. "
-        "RMSE/MAE/R² are the primary metrics; Accuracy/Precision/Recall/F1 "
-        "are supplementary price-bracket metrics."
+        "RMSE, MAE and R² are the decision metrics. Five-fold cross-validation "
+        "is used for parameter tuning on training data only."
     )
 
     metric_row([
@@ -523,17 +594,13 @@ with tab_compare:
 
     with st.expander("📋 Final Test-Set Results table", expanded=False):
         display_cols = [
-            "Model", "Role", "Accuracy", "Precision", "Recall", "F1",
-            "RMSE", "MAE", "R2"
+            "Model", "Role", "CV RMSE", "RMSE", "MAE", "R2"
         ]
         # Backend versions without Role are still supported.
         display_cols = [c for c in display_cols if c in results_df.columns]
 
         formatted = results_df[display_cols].copy()
-        for col in ["Accuracy", "Precision", "Recall", "F1"]:
-            if col in formatted.columns:
-                formatted[col] = formatted[col].map(lambda x: f"{x:.1%}")
-        for col in ["RMSE", "MAE"]:
+        for col in ["CV RMSE", "RMSE", "MAE"]:
             if col in formatted.columns:
                 formatted[col] = formatted[col].map(lambda x: f"RM {x:,.0f}")
         if "R2" in formatted.columns:
@@ -541,10 +608,28 @@ with tab_compare:
 
         st.dataframe(formatted, width="stretch", hide_index=True)
 
+    # These are intentionally separate from the regression table.  The
+    # continuous predictions are binned into quartile price bands only as an
+    # additional communication aid; they do not determine the winning model.
+    bracket_df = pd.DataFrame(diag.get("bracket_results_all_models", []))
+    with st.expander("🎯 Supplementary price-bracket metrics — all 4 models", expanded=True):
+        st.caption(
+            "For a familiar classification-style view, test predictions are converted "
+            "to four data-derived price brackets. RMSE, MAE and R² remain the primary "
+            "metrics because this is a regression problem."
+        )
+        if len(bracket_df):
+            bracket_display = bracket_df[["Model", "Accuracy", "Precision", "Recall", "F1"]].copy()
+            for metric in ["Accuracy", "Precision", "Recall", "F1"]:
+                bracket_display[metric] = bracket_display[metric].map(lambda value: f"{value:.1%}")
+            st.dataframe(bracket_display, width="stretch", hide_index=True)
+        else:
+            st.info("Supplementary bracket metrics are unavailable.")
+
     st.divider()
 
     # ================================================================
-    # INTERACTIVE PLOTLY CHARTS — one selector instead of 8 stacked charts
+    # INTERACTIVE PLOTLY CHARTS — regression diagnostics only
     # ================================================================
     st.markdown("##### 📊 Visual Model Comparison")
 
@@ -566,8 +651,6 @@ with tab_compare:
     chart_options = [
         "⚖️ RMSE & MAE",
         "📈 R² Score",
-        "🎯 Classification metrics",
-        "🧩 Confusion matrix",
         "📦 Residual boxplot",
         "🌊 Residual distribution",
         "🔀 Actual vs Predicted",
@@ -611,64 +694,15 @@ with tab_compare:
             color=model_order, color_discrete_map=model_colors,
         )
         fig.update_traces(textposition="outside")
-        fig.update_layout(**PLOTLY_LAYOUT, height=420, showlegend=False,
-                           yaxis=dict(title="R²", range=[0, 1]), xaxis_title=None,
-                           title="R² Score by Model")
+        fig.update_layout(
+            **PLOTLY_LAYOUT,
+            height=420,
+            showlegend=False,
+            xaxis_title=None,
+            title="R² Score by Model",
+        )
+        fig.update_yaxes(title="R²", range=[0, 1])
         st.plotly_chart(fig, width="stretch")
-
-    elif chart_choice == "🎯 Classification metrics":
-        st.caption(
-            "Supplementary metrics after converting the continuous price "
-            "prediction into four price brackets."
-        )
-        if len(bracket_df):
-            long_df = bracket_df.melt(
-                id_vars="Model",
-                value_vars=["Accuracy", "Precision", "Recall", "F1"],
-                var_name="Metric", value_name="Score",
-            )
-            fig = px.bar(
-                long_df, x="Model", y="Score", color="Metric", barmode="group",
-                color_discrete_sequence=PALETTE,
-            )
-            fig.update_layout(**PLOTLY_LAYOUT, height=420,
-                               yaxis=dict(range=[0, 1]), xaxis_title=None,
-                               title="Price-Bracket Classification Metrics")
-            st.plotly_chart(fig, width="stretch")
-        else:
-            st.info("No classification metrics available.")
-
-    elif chart_choice == "🧩 Confusion matrix":
-        cm = diag.get("bracket_confusion_matrix") or []
-        labels = diag.get("price_bin_labels") or []
-        st.caption(
-            f"Best model: {best_name}. Rows = actual price bracket, "
-            "columns = predicted price bracket. Darker cells on the "
-            "diagonal mean more correct classifications."
-        )
-        if cm and labels:
-            cm_arr = np.asarray(cm)
-            short_labels = [
-                lbl.replace("RM ", "").replace(",", "") for lbl in labels
-            ]
-            fig = px.imshow(
-                cm_arr,
-                x=short_labels,
-                y=short_labels,
-                color_continuous_scale=["#0f172a", "#3B82F6", "#22C55E"],
-                text_auto=True,
-                aspect="auto",
-            )
-            fig.update_layout(
-                **PLOTLY_LAYOUT, height=480,
-                xaxis_title="Predicted bracket", yaxis_title="Actual bracket",
-                title=f"Confusion Matrix — {best_name} (price brackets)",
-                coloraxis_showscale=False,
-            )
-            fig.update_traces(textfont_size=14)
-            st.plotly_chart(fig, width="stretch")
-        else:
-            st.info("No confusion matrix available.")
 
     elif chart_choice == "📦 Residual boxplot":
         st.caption(
@@ -678,7 +712,7 @@ with tab_compare:
         fig = go.Figure()
         for name in model_order:
             fig.add_box(y=residuals[name], name=name, marker_color=model_colors[name])
-        fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.5)")
+        fig.add_hline(y=0, line_dash="dash", line_color="rgba(45,34,89,0.45)")
         fig.update_layout(**PLOTLY_LAYOUT, height=460, showlegend=False,
                            yaxis_title="Residual (RM)", title="Residual Error Distribution")
         st.plotly_chart(fig, width="stretch")
@@ -689,7 +723,7 @@ with tab_compare:
         for name in model_order:
             fig.add_histogram(x=residuals[name], name=name, opacity=0.55,
                                marker_color=model_colors[name], nbinsx=30)
-        fig.add_vline(x=0, line_dash="dash", line_color="rgba(255,255,255,0.5)")
+        fig.add_vline(x=0, line_dash="dash", line_color="rgba(45,34,89,0.45)")
         fig.update_layout(**PLOTLY_LAYOUT, height=460, barmode="overlay",
                            xaxis_title="Residual (RM)", yaxis_title="Frequency",
                            title="Residual Distribution")
@@ -708,7 +742,7 @@ with tab_compare:
                          marker=dict(color="#22C55E", opacity=0.6, size=7),
                          name=best_name)
         fig.add_scatter(x=[low, high], y=[low, high], mode="lines",
-                         line=dict(dash="dash", color="rgba(255,255,255,0.5)"),
+                         line=dict(dash="dash", color="rgba(45,34,89,0.45)"),
                          name="Ideal (y = x)")
         fig.update_layout(**PLOTLY_LAYOUT, height=480,
                            xaxis_title="Actual Price (RM)", yaxis_title="Predicted Price (RM)",
@@ -724,7 +758,7 @@ with tab_compare:
         fig = go.Figure()
         fig.add_scatter(x=best_predictions, y=residuals[best_name], mode="markers",
                          marker=dict(color="#8B5CF6", opacity=0.6, size=7))
-        fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.5)")
+        fig.add_hline(y=0, line_dash="dash", line_color="rgba(45,34,89,0.45)")
         fig.update_layout(**PLOTLY_LAYOUT, height=480, showlegend=False,
                            xaxis_title="Predicted Price (RM)", yaxis_title="Residual (RM)",
                            title=f"Residuals vs Predicted — {best_name}")
@@ -752,10 +786,7 @@ with tab_compare:
         if len(tuning_df):
             st.dataframe(tuning_df, width="stretch", hide_index=True)
 
-    st.caption(
-        f"Baseline: {baseline_name}. Classification metrics are supplementary; "
-        "RMSE, MAE and R² remain the primary regression measures."
-    )
+    st.caption(f"Baseline: {baseline_name}. The final model is selected by held-out test RMSE, supported by MAE and R².")
 
 
 # PAGE 3 — PRICE PREDICTOR
@@ -808,6 +839,24 @@ with tab_predict:
         "nearby": "pp_nearby",
     }
 
+    # Values emitted by the animated HTML studio are returned via query
+    # parameters, then applied to Streamlit state on the next rerun.
+    studio_field = st.query_params.get("studio_field")
+    studio_value = st.query_params.get("studio_value")
+    studio_limits = {
+        "bedroom": (0, 20), "bathroom": (0, 20), "parking": (0, 20),
+        "size": (1, 200000),
+    }
+    if studio_field in studio_limits and studio_value is not None:
+        try:
+            number = int(float(studio_value))
+            low, high = studio_limits[studio_field]
+            st.session_state[FIELD_KEYS[studio_field]] = max(low, min(high, number))
+        except (TypeError, ValueError):
+            pass
+        st.query_params.pop("studio_field", None)
+        st.query_params.pop("studio_value", None)
+
     def apply_field_values(values):
         """Push a full bundle of values into every widget key at once."""
         ptype = values.get("property_type")
@@ -828,6 +877,8 @@ with tab_predict:
         for field, key in FIELD_KEYS.items():
             if field in values:
                 st.session_state[key] = values[field]
+                if field in {"bedroom", "bathroom", "parking"}:
+                    st.session_state[f"fp_editor_{field}"] = int(values[field])
 
         st.session_state["autofill_price"] = values.get("price")
 
@@ -942,21 +993,6 @@ with tab_predict:
     )
 
     # -------------------------------------------------------------
-    # ⚡ Quick presets — one click updates every field below
-    # -------------------------------------------------------------
-    st.markdown("#### ⚡ Quick Presets")
-    st.caption("Tap a preset to instantly fill every field — layout, location, facilities and all.")
-
-    st.markdown('<div class="pp-preset-row">', unsafe_allow_html=True)
-    preset_cols = st.columns(len(PRESETS))
-    for col, (label, values) in zip(preset_cols, PRESETS.items()):
-        with col:
-            if st.button(label, key=f"preset_{label}", width="stretch"):
-                apply_field_values(values)
-                st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # -------------------------------------------------------------
     # Optional autofill from a real listing (collapsed to stay compact)
     # -------------------------------------------------------------
     with st.expander("📋 Or autofill from an existing listing", expanded=False):
@@ -1039,14 +1075,13 @@ with tab_predict:
     autofill_price = st.session_state.get("autofill_price")
 
     # -------------------------------------------------------------
-    # 🏙️ Property showcase — real 3D model when available, animated
-    # placeholder building otherwise. Cycled with the arrow buttons,
-    # and instantly synced when a preset/autofill sets the type.
+    # Build your property in 3D — one unified studio that combines what
+    # used to be three separate blocks (3D builder, property showcase,
+    # floor-plan editor) into a single component so the model, the
+    # property-type switcher, and the tappable stat editors all live
+    # in one place instead of repeating the model / repeating the
+    # bedroom-bathroom-parking inputs across sections.
     # -------------------------------------------------------------
-    st.divider()
-    st.markdown("#### 🏙️ Property Showcase")
-    st.caption("Cycle through property types with the arrows, or pick a preset above — the model updates live.")
-
     if "predict_ptype_idx" not in st.session_state:
         st.session_state["predict_ptype_idx"] = 0
 
@@ -1055,12 +1090,113 @@ with tab_predict:
     visual = PTYPE_VISUALS.get(property_type, PTYPE_VISUALS["Others"])
     color_a, color_b = visual["grad"]
 
-    show_left, show_model, show_right = st.columns([1, 5, 1])
+    studio_model_url = get_model_asset_url(property_type)
+    studio_values = {
+        "bedroom": safe_int(st.session_state.get("pp_bedroom", 3), 3),
+        "bathroom": safe_int(st.session_state.get("pp_bathroom", 2), 2),
+        "parking": safe_int(st.session_state.get("pp_parking", 1), 1),
+        "size": safe_int(st.session_state.get("pp_size", 900), 900),
+    }
+    studio_labels = {
+        "bedroom": ("🛏️", "Bedrooms", "rooms"),
+        "bathroom": ("🛁", "Bathrooms", "rooms"),
+        "parking": ("🚗", "Parking", "lots"),
+        "size": ("📐", "Property size", "sq.ft."),
+    }
+    studio_cards = "".join(
+        f'<button class="studio-card card-{field}" onclick="openEditor(\'{field}\')">'
+        f'<span>{icon}</span><b>{label}</b><em>{studio_values[field]:,} {unit}</em></button>'
+        for field, (icon, label, unit) in studio_labels.items()
+    )
 
-    with show_left:
-        st.write("")
-        st.write("")
-        st.write("")
+    # Colourised, per-type animated building — used both as the "no .glb
+    # bundled yet" fallback and, visually, as the same building shown in
+    # the old Property Showcase block, so nothing is lost by merging.
+    css_slats = "".join(
+        f'<div class="bfloor" style="animation-delay:{i * 0.05}s;'
+        f'background:linear-gradient(90deg,{color_a}cc,{color_b}cc);"></div>'
+        for i in range(visual["floors"])
+    )
+    studio_fallback_building = f"""
+      <div class="studio-building3d">
+        <div class="sbface sbfront">{css_slats}</div>
+        <div class="sbface sbside" style="background:linear-gradient(180deg,{color_a}66,{color_b}22);"></div>
+        <div class="sbface sbtop" style="background:linear-gradient(90deg,{color_a}cc,{color_b}cc);"></div>
+      </div>
+    """
+    studio_model = (
+        f'<model-viewer src="{studio_model_url}" alt="3D {property_type}" camera-controls auto-rotate '
+        'rotation-per-second="18deg" shadow-intensity="1" exposure="1.12"></model-viewer>'
+        if studio_model_url else
+        studio_fallback_building
+    )
+    studio_html = f"""
+    <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+    <main class="studio-shell" id="studioShell" onclick="backdropClose(event)">
+      <section class="studio-copy"><span>LIVE PROPERTY BUILDER</span><h2>Tap a detail to shape your home.</h2><p>The model responds as you build a property profile.</p></section>
+      <section class="input-drawer" id="inputDrawer">
+        <button class="drawer-close" onclick="closeEditor()">×</button>
+        <div class="drawer-icon" id="drawerIcon">✨</div><p>PROPERTY DETAIL</p>
+        <h3 id="drawerTitle">Choose a detail</h3><small id="drawerHint">Select a floating card around the model.</small>
+        <input id="drawerInput" type="number" min="0" step="1" />
+        <button class="drawer-save" onclick="saveEditor()">Apply to model ✨</button>
+      </section>
+      <section class="studio-stage" id="studioStage">
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+        <div class="studio-model">{studio_model}</div>
+        <div class="studio-cards">{studio_cards}</div>
+        <div class="model-badge">{visual['emoji']} {property_type} · 3D VIEW</div>
+      </section>
+    </main>
+    <script>
+      const values = {studio_values};
+      const meta = {{bedroom:['🛏️','Bedrooms','rooms',0,20], bathroom:['🛁','Bathrooms','rooms',0,20], parking:['🚗','Parking lots','lots',0,20], size:['📐','Property size','sq.ft.',1,200000]}};
+      let active = null;
+      function openEditor(field) {{
+        active = field; const item = meta[field];
+        document.getElementById('studioShell').classList.add('editing');
+        document.getElementById('drawerIcon').textContent = item[0];
+        document.getElementById('drawerTitle').textContent = item[1];
+        document.getElementById('drawerHint').textContent = 'Set the number of ' + item[1].toLowerCase() + '.';
+        const input = document.getElementById('drawerInput'); input.value = values[field]; input.min = item[3]; input.max = item[4]; input.focus();
+      }}
+      function closeEditor() {{ active = null; document.getElementById('studioShell').classList.remove('editing'); }}
+      function backdropClose(event) {{ if (event.target.id === 'studioShell') closeEditor(); }}
+      function saveEditor() {{
+        if (!active) return; const input = document.getElementById('drawerInput');
+        const url = new URL(window.parent.location.href); url.searchParams.set('studio_field', active); url.searchParams.set('studio_value', input.value); window.parent.location.href = url.toString();
+      }}
+    </script>
+    <style>
+      * {{ box-sizing:border-box; }} body {{ margin:0; background:transparent; color:#283551; font-family:Inter,Arial,sans-serif; }}
+      .studio-shell {{ min-height:425px; position:relative; overflow:hidden; border-radius:28px; padding:26px; background:linear-gradient(130deg,#fff7cf,#ffe7f3 45%,#dff7ff); border:1px solid rgba(109,74,255,.14); }}
+      .studio-copy {{ position:relative; z-index:3; width:36%; }} .studio-copy span,.input-drawer p {{ color:#7759d7; font-size:10px; font-weight:900; letter-spacing:.14em; }} .studio-copy h2 {{ font-size:28px; line-height:1.02; margin:7px 0 10px; letter-spacing:-.04em; }} .studio-copy p {{ margin:0; font-size:13px; color:#65708a; max-width:210px; }}
+      .studio-stage {{ position:absolute; inset:0 0 0 28%; transition:transform .62s cubic-bezier(.2,.9,.2,1); }} .editing .studio-stage {{ transform:translateX(19%); }}
+      .studio-model {{ width:245px; height:280px; position:absolute; left:50%; top:58px; transform:translateX(-50%); z-index:2; display:flex; align-items:flex-end; justify-content:center; perspective:950px; }} model-viewer {{ width:100%; height:100%; --poster-color:transparent; }}
+      .orbit {{ position:absolute; border:1px dashed rgba(109,74,255,.25); border-radius:50%; left:50%; top:55%; transform:translate(-50%,-50%); }} .orbit-one {{ width:340px; height:130px; }} .orbit-two {{ width:270px; height:100px; transform:translate(-50%,-50%) rotate(-19deg); }}
+      .studio-cards {{ position:absolute; inset:0; z-index:4; }} .studio-card {{ position:absolute; display:flex; gap:7px; align-items:center; text-align:left; padding:9px 12px; border:1px solid rgba(109,74,255,.17); border-radius:16px; background:rgba(255,255,255,.88); box-shadow:0 16px 28px -19px rgba(67,47,143,.45); color:#293451; cursor:pointer; transition:transform .2s, box-shadow .2s; }} .studio-card:hover {{ transform:translateY(-4px) scale(1.03); box-shadow:0 18px 30px -15px rgba(109,74,255,.4); }} .studio-card span {{ font-size:21px; }} .studio-card b,.studio-card em {{ display:block; font-style:normal; }} .studio-card b {{ font-size:11px; }} .studio-card em {{ color:#7865b6; font-size:10px; margin-top:2px; }} .card-bedroom {{ left:10%; top:25%; }} .card-bathroom {{ right:8%; top:21%; }} .card-parking {{ right:10%; bottom:20%; }} .card-size {{ left:15%; bottom:18%; }}
+      .model-badge {{ position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:4; color:#624fa4; font-size:10px; font-weight:900; padding:7px 10px; border-radius:999px; background:rgba(255,255,255,.8); }}
+      .input-drawer {{ position:absolute; z-index:8; left:20px; top:50%; width:258px; padding:24px; border-radius:22px; background:rgba(255,255,255,.96); box-shadow:0 25px 45px -22px rgba(68,45,142,.45); opacity:0; transform:translate(-130%,-50%); transition:opacity .42s ease,transform .58s cubic-bezier(.2,.9,.2,1); pointer-events:none; }} .editing .input-drawer {{ opacity:1; transform:translate(0,-50%); pointer-events:auto; }} .drawer-close {{ position:absolute; right:12px; top:10px; border:0; background:#f1edff; border-radius:50%; width:26px; height:26px; font-size:20px; cursor:pointer; color:#684dd1; }} .drawer-icon {{ font-size:31px; }} .input-drawer h3 {{ margin:7px 0 5px; font-size:22px; }} .input-drawer small {{ color:#68738c; line-height:1.3; }} .input-drawer input {{ width:100%; margin:17px 0 10px; padding:12px; border:1px solid #dfd7ff; border-radius:13px; color:#303b59; font-size:18px; font-weight:800; outline-color:#7456ff; }} .drawer-save {{ width:100%; border:0; border-radius:13px; padding:12px; color:#fff; font-weight:800; background:linear-gradient(105deg,#6d4aff,#ff68a8); cursor:pointer; }}
+      .studio-building3d {{ position:relative; width:100px; height:150px; transform-style:preserve-3d; animation: studioSpin3d 9s linear infinite; }}
+      @keyframes studioSpin3d {{ from {{ transform: rotateY(0deg) rotateX(8deg); }} to {{ transform: rotateY(360deg) rotateX(8deg); }} }}
+      @keyframes studioFloorGlow {{ 0%, 100% {{ opacity: 0.75; }} 50% {{ opacity: 1; }} }}
+      .sbface {{ position:absolute; border:1px solid rgba(255,255,255,0.28); border-radius:4px; }}
+      .sbfront {{ width:100px; height:150px; transform: translateZ(25px); display:flex; flex-direction:column-reverse; gap:3px; padding:5px; background: rgba(255,255,255,0.03); }}
+      .sbside {{ width:50px; height:150px; transform: rotateY(90deg) translateZ(25px) translateX(25px); }}
+      .sbtop {{ width:100px; height:50px; transform: rotateX(90deg) translateZ(25px) translateY(-50px); opacity: 0.85; }}
+      .bfloor {{ flex:1; border-radius:2px; box-shadow: 0 0 8px rgba(255,255,255,0.18) inset; animation: studioFloorGlow 2.4s ease-in-out infinite; }}
+      @media(max-width:650px) {{ .studio-copy {{ width:55%; }} .studio-copy h2 {{ font-size:22px; }} .studio-stage {{ left:8%; }} .studio-model {{ transform:translateX(-30%); }} .studio-card {{ padding:7px; }} .studio-card b {{ display:none; }} .card-bedroom {{ left:1%; }} .card-size {{ left:2%; }} .card-bathroom {{ right:1%; }} .card-parking {{ right:1%; }} .editing .studio-stage {{ transform:translateX(40%); }} }}
+    </style>
+    """
+    st.markdown("#### 🧩 Build your property in 3D")
+    st.caption(
+        "Cycle property types with the arrows, tap a floating card to edit a stat, "
+        "or pick a preset above — one model, always in sync."
+    )
+
+    studio_prev, studio_stage_col, studio_next = st.columns([1, 8, 1])
+
+    with studio_prev:
         st.write("")
         st.markdown('<div class="ptype-cycle-btn">', unsafe_allow_html=True)
         if st.button("◀", key="ptype_prev", width="stretch", help="Previous property type"):
@@ -1068,10 +1204,10 @@ with tab_predict:
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with show_right:
-        st.write("")
-        st.write("")
-        st.write("")
+    with studio_stage_col:
+        components.html(studio_html, height=435)
+
+    with studio_next:
         st.write("")
         st.markdown('<div class="ptype-cycle-btn">', unsafe_allow_html=True)
         if st.button("▶", key="ptype_next", width="stretch", help="Next property type"):
@@ -1079,343 +1215,44 @@ with tab_predict:
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    with show_model:
-        model_url = get_model_asset_url(property_type)
-
-        css_slats = "".join(
-            f'<div class="bfloor" style="animation-delay:{i * 0.05}s;'
-            f'background:linear-gradient(90deg,{color_a}cc,{color_b}cc);"></div>'
-            for i in range(visual["floors"])
-        )
-        css_building_html = f"""
-          <div class="showcase-scene">
-            <div class="building3d">
-              <div class="bface bfront">{css_slats}</div>
-              <div class="bface bside" style="background:linear-gradient(180deg,{color_a}66,{color_b}22);"></div>
-              <div class="bface btop" style="background:linear-gradient(90deg,{color_a}cc,{color_b}cc);"></div>
-            </div>
-          </div>
-        """
-
-        if model_url:
-            # Real .glb rendered with <model-viewer>, wrapped in a fancy
-            # gradient frame. A shimmer skeleton shows while it loads, and
-            # if the file 404s (e.g. static serving isn't enabled on the
-            # host) it swaps live to the animated placeholder below —
-            # so the showcase never looks broken.
-            model_html = f"""
-            <script type="module"
-                    src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
-            <div class="mv-wrap" id="mvWrap-{property_type.replace(' ', '')}">
-              <div class="mv-shimmer" id="mvShimmer"></div>
-              <model-viewer id="mvEl" src="{model_url}"
-                             alt="3D model of a {property_type}"
-                             camera-controls auto-rotate
-                             rotation-per-second="16deg"
-                             shadow-intensity="1"
-                             exposure="1.05"
-                             environment-image="neutral"
-                             style="width:100%;height:236px;background:transparent;opacity:0;transition:opacity .35s ease;">
-              </model-viewer>
-              <div class="mv-fallback" id="mvFallback" style="display:none;">
-                {css_building_html}
-                <div class="mv-fallback-chip">🧩 Live 3D unavailable — showing preview</div>
-              </div>
-              <div class="mv-label">
-                <span class="mv-emoji">{visual['emoji']}</span>
-                <span class="mv-name">{property_type}</span>
-              </div>
-            </div>
-            <style>
-              * {{ box-sizing: border-box; }}
-              .mv-wrap {{
-                  position: relative;
-                  border-radius: 18px; overflow: hidden; padding: 10px 10px 12px 10px;
-                  background: linear-gradient(135deg,{color_a}22,{color_b}11);
-                  border: 1px solid {color_a}55;
-                  box-shadow: 0 18px 30px -20px {color_a}77;
-                  font-family: -apple-system, sans-serif;
-              }}
-              model-viewer {{ --poster-color: transparent; border-radius: 12px; position: relative; z-index: 2; }}
-              .mv-shimmer {{
-                  position:absolute; top:10px; left:10px; right:10px; height:236px;
-                  border-radius:12px; z-index:1;
-                  background: linear-gradient(100deg, {color_a}18 30%, {color_a}33 45%, {color_a}18 60%);
-                  background-size: 200% 100%;
-                  animation: mvShimmer 1.3s ease-in-out infinite;
-              }}
-              @keyframes mvShimmer {{
-                  0% {{ background-position: 200% 0; }}
-                  100% {{ background-position: -200% 0; }}
-              }}
-              .mv-fallback-chip {{
-                  text-align:center; font-size:11px; opacity:.75; margin-top:6px;
-              }}
-              .mv-label {{ text-align: center; margin-top: 6px; position: relative; z-index: 2; }}
-              .mv-emoji {{ font-size: 22px; margin-right: 6px; }}
-              .mv-name {{
-                  font-size: 17px; font-weight: 800;
-                  background: linear-gradient(90deg,{color_a},{color_b});
-                  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-              }}
-              .showcase-scene {{
-                  width: 100%; height: 210px; perspective: 950px;
-                  display:flex; align-items:flex-end; justify-content:center;
-              }}
-              .building3d {{
-                  position:relative; width:100px; height:150px;
-                  transform-style: preserve-3d;
-                  animation: spin3d 9s linear infinite;
-              }}
-              @keyframes spin3d {{
-                  from {{ transform: rotateY(0deg) rotateX(8deg); }}
-                  to   {{ transform: rotateY(360deg) rotateX(8deg); }}
-              }}
-              @keyframes floorGlow {{
-                  0%, 100% {{ opacity: 0.75; }}
-                  50% {{ opacity: 1; }}
-              }}
-              .bface {{ position:absolute; border:1px solid rgba(255,255,255,0.28); border-radius:4px; }}
-              .bfront {{
-                  width:100px; height:150px; transform: translateZ(25px);
-                  display:flex; flex-direction:column-reverse; gap:3px; padding:5px;
-                  background: rgba(255,255,255,0.03);
-              }}
-              .bside {{ width:50px; height:150px; transform: rotateY(90deg) translateZ(25px) translateX(25px); }}
-              .btop {{ width:100px; height:50px; transform: rotateX(90deg) translateZ(25px) translateY(-50px); opacity: 0.85; }}
-              .bfloor {{ flex:1; border-radius:2px; box-shadow: 0 0 8px rgba(255,255,255,0.18) inset; animation: floorGlow 2.4s ease-in-out infinite; }}
-            </style>
-            <script>
-              (function() {{
-                const mv = document.getElementById("mvEl");
-                const shimmer = document.getElementById("mvShimmer");
-                const fallback = document.getElementById("mvFallback");
-                if (!mv) return;
-                mv.addEventListener("load", function() {{
-                  if (shimmer) shimmer.style.display = "none";
-                  mv.style.opacity = "1";
-                }});
-                mv.addEventListener("error", function() {{
-                  if (shimmer) shimmer.style.display = "none";
-                  mv.style.display = "none";
-                  if (fallback) fallback.style.display = "flex";
-                  if (fallback) fallback.style.flexDirection = "column";
-                  if (fallback) fallback.style.alignItems = "center";
-                }});
-                // Safety net: if neither load nor error fires in time
-                // (some hosts hang on a misconfigured static route),
-                // fall back anyway so the tile never looks stuck.
-                setTimeout(function() {{
-                  if (mv.style.opacity !== "1" && fallback && fallback.style.display === "none") {{
-                    if (shimmer) shimmer.style.display = "none";
-                    mv.style.display = "none";
-                    fallback.style.display = "flex";
-                    fallback.style.flexDirection = "column";
-                    fallback.style.alignItems = "center";
-                  }}
-                }}, 6000);
-              }})();
-            </script>
-            """
-            components.html(model_html, height=300)
-        else:
-            model_html = f"""
-            <div class="showcase-wrap">
-              {css_building_html}
-              <div class="showcase-label">
-                <span class="showcase-emoji">{visual['emoji']}</span>
-                <span class="showcase-name">{property_type}</span>
-              </div>
-            </div>
-            <style>
-              * {{ box-sizing: border-box; }}
-              .showcase-wrap {{ display:flex; flex-direction:column; align-items:center; font-family: -apple-system, sans-serif; }}
-              .showcase-scene {{
-                  width: 100%; height: 210px; perspective: 950px;
-                  display:flex; align-items:flex-end; justify-content:center;
-              }}
-              .building3d {{
-                  position:relative; width:112px; height:168px;
-                  transform-style: preserve-3d;
-                  animation: spin3d 9s linear infinite;
-              }}
-              @keyframes spin3d {{
-                  from {{ transform: rotateY(0deg) rotateX(8deg); }}
-                  to   {{ transform: rotateY(360deg) rotateX(8deg); }}
-              }}
-              @keyframes floorGlow {{
-                  0%, 100% {{ opacity: 0.75; }}
-                  50% {{ opacity: 1; }}
-              }}
-              .bface {{ position:absolute; border:1px solid rgba(255,255,255,0.28); border-radius:4px; }}
-              .bfront {{
-                  width:112px; height:168px; transform: translateZ(28px);
-                  display:flex; flex-direction:column-reverse; gap:3px; padding:5px;
-                  background: rgba(255,255,255,0.03);
-              }}
-              .bside {{ width:56px; height:168px; transform: rotateY(90deg) translateZ(28px) translateX(28px); }}
-              .btop {{ width:112px; height:56px; transform: rotateX(90deg) translateZ(28px) translateY(-56px); opacity: 0.85; }}
-              .bfloor {{ flex:1; border-radius:2px; box-shadow: 0 0 8px rgba(255,255,255,0.18) inset; animation: floorGlow 2.4s ease-in-out infinite; }}
-              .showcase-label {{ margin-top: 8px; text-align:center; }}
-              .showcase-emoji {{ font-size: 24px; margin-right:6px; }}
-              .showcase-name {{
-                  font-size: 18px; font-weight: 800;
-                  background: linear-gradient(90deg,{color_a},{color_b});
-                  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-              }}
-            </style>
-            """
-            components.html(model_html, height=280)
-            st.caption(
-                "🧩 No bundled 3D model for this type yet — showing the animated "
-                "placeholder. Drop a `.glb` into `static/models/` (see README) to enable the real model."
-            )
-
-    # -------------------------------------------------------------
-    # 📐 Compact property-details card — every widget keyed so
-    # presets & autofill both drive it directly.
-    # -------------------------------------------------------------
-    st.divider()
-    st.markdown("#### 📐 Property Details")
-
-    st.markdown('<div class="floorplan-marker"></div>', unsafe_allow_html=True)
-    with st.container(border=True):
-        fp_row1 = st.columns(4)
-
-        with fp_row1[0]:
-            bedroom = st.slider(
-                "🛏️ Bedrooms", min_value=0, max_value=20,
-                value=st.session_state.get("pp_bedroom", 3), key="pp_bedroom",
-            )
-
-        with fp_row1[1]:
-            bathroom = st.slider(
-                "🛁 Bathrooms", min_value=0, max_value=20,
-                value=st.session_state.get("pp_bathroom", 2), key="pp_bathroom",
-            )
-
-        with fp_row1[2]:
-            parking = st.slider(
-                "🚗 Parking Lots", min_value=0, max_value=20,
-                value=st.session_state.get("pp_parking", 1), key="pp_parking",
-            )
-
-        with fp_row1[3]:
-            floors = st.slider(
-                "🏗️ Building Floors", min_value=1, max_value=100,
-                value=st.session_state.get("pp_floors", 20), key="pp_floors",
-            )
-
-        fp_row2 = st.columns(4)
-
-        with fp_row2[0]:
-            size = st.number_input(
-                "📐 Property Size (sq.ft.)", min_value=1, max_value=200000,
-                value=st.session_state.get("pp_size", 900), step=50, key="pp_size",
-            )
-
-        with fp_row2[1]:
-            total_units = st.number_input(
-                "🏘️ Total Units", min_value=1, max_value=20000,
-                value=st.session_state.get("pp_total_units", 500), step=10, key="pp_total_units",
-            )
-
-        with fp_row2[2]:
-            completion_year = st.number_input(
-                "🗓️ Completion Year", min_value=1900, max_value=2100,
-                value=st.session_state.get("pp_completion_year", 2015), key="pp_completion_year",
-            )
-
-        with fp_row2[3]:
-            tenure = st.selectbox(
-                "Tenure Type", TENURE_OPTIONS,
-                index=TENURE_OPTIONS.index(st.session_state.get("pp_tenure", "Freehold"))
-                if st.session_state.get("pp_tenure", "Freehold") in TENURE_OPTIONS else 0,
-                key="pp_tenure",
-            )
-
-        fp_row3 = st.columns(2)
-
-        with fp_row3[0]:
-            land_title = st.selectbox(
-                "Land Title", LAND_OPTIONS,
-                index=LAND_OPTIONS.index(st.session_state.get("pp_land_title", "Non Bumi Lot"))
-                if st.session_state.get("pp_land_title", "Non Bumi Lot") in LAND_OPTIONS else 0,
-                key="pp_land_title",
-            )
-
-        with fp_row3[1]:
-            floor_range = st.selectbox(
-                "Floor Range", FLOOR_RANGE_OPTIONS,
-                index=FLOOR_RANGE_OPTIONS.index(st.session_state.get("pp_floor_range", "-"))
-                if st.session_state.get("pp_floor_range", "-") in FLOOR_RANGE_OPTIONS
-                else len(FLOOR_RANGE_OPTIONS) - 1,
-                key="pp_floor_range",
-            )
-
-        # ---- live top-down floor-plan preview, redrawn on every change ----
-        plan_width = max(200, min(480, int(200 + (size / 900) * 70)))
-
-        def _tiles(count, css_class, icon, label):
-            shown = min(count, 8)
-            html = "".join(
-                f'<div class="room-tile {css_class}">{icon}<span>{label}</span></div>'
-                for _ in range(shown)
-            )
-            if count > 8:
-                html += f'<div class="room-tile more">+{count - 8}</div>'
-            return html
-
-        fp_tiles = (
-            _tiles(bedroom, "bed", "🛏️", "Bed")
-            + _tiles(bathroom, "bath", "🛁", "Bath")
-            + _tiles(parking, "park", "🚗", "Park")
+    if not studio_model_url:
+        st.caption(
+            "🧩 No bundled 3D model for this type yet — showing the animated "
+            "placeholder. Drop a `.glb` into `static/models/` (see README) to enable the real model."
         )
 
-        floor_plan_html = f"""
-        <div class="fp-scene">
-          <div class="fp-plan" style="width:{plan_width}px;">
-            <div class="fp-header">🗺️ {int(size):,} sq.ft. · {bedroom} bed · {bathroom} bath layout</div>
-            <div class="fp-grid">{fp_tiles if fp_tiles else '<span style="opacity:.6;font-size:12px;">Add rooms above to preview the layout</span>'}</div>
-          </div>
-        </div>
-        <style>
-          * {{ box-sizing: border-box; }}
-          .fp-scene {{ display:flex; justify-content:center; padding: 4px 0 22px 0; perspective: 1200px; font-family: -apple-system, sans-serif; }}
-          .fp-plan {{
-              background:
-                repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 22px),
-                repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 22px),
-                linear-gradient(160deg, rgba(34,197,94,0.12), rgba(59,130,246,0.12));
-              border: 1px solid rgba(255,255,255,0.28);
-              border-radius: 14px;
-              padding: 12px;
-              transform: rotateX(34deg);
-              transform-style: preserve-3d;
-              box-shadow: 0 24px 32px -20px rgba(0,0,0,0.55);
-              transition: transform .4s ease;
-          }}
-          .fp-plan:hover {{ transform: rotateX(14deg); }}
-          .fp-header {{
-              font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
-              opacity:.8; margin-bottom:8px; text-align:center;
-          }}
-          .fp-grid {{ display:flex; flex-wrap:wrap; gap:7px; justify-content:center; align-items:center; min-height: 46px; }}
-          .room-tile {{
-              width:46px; height:46px; border-radius:9px; display:flex; flex-direction:column;
-              align-items:center; justify-content:center; font-size:17px;
-              box-shadow: 0 4px 10px rgba(0,0,0,0.35);
-          }}
-          .room-tile span {{ font-size:7px; text-transform:uppercase; opacity:.85; margin-top:1px; }}
-          .room-tile.bed  {{ background: linear-gradient(145deg,#22C55E55,#22C55E1a); border:1px solid #22C55E88; }}
-          .room-tile.bath {{ background: linear-gradient(145deg,#3B82F655,#3B82F61a); border:1px solid #3B82F688; }}
-          .room-tile.park {{ background: linear-gradient(145deg,#F59E0B55,#F59E0B1a); border:1px solid #F59E0B88; }}
-          .room-tile.more {{ background: rgba(255,255,255,0.1); border:1px dashed rgba(255,255,255,0.4); font-size:12px; font-weight:700; }}
-        </style>
-        """
-        components.html(floor_plan_html, height=260)
+    # The floating cards' drawer owns bedroom/bathroom/parking/size — read
+    # their current values back so the prediction payload stays synced.
+    bedroom = safe_int(st.session_state.get("pp_bedroom", 3), 3)
+    bathroom = safe_int(st.session_state.get("pp_bathroom", 2), 2)
+    parking = safe_int(st.session_state.get("pp_parking", 1), 1)
 
-    # -------------------------------------------------------------
+    def visual_picker(label, options, key, default, format_func=None):
+        """Chip-based input for a fast, visual alternative to sliders/selects."""
+        current = st.session_state.get(key, default)
+        values = list(options)
+        if current not in values:
+            values.append(current)
+        selected = st.pills(
+            label, values, default=current, selection_mode="single", key=key,
+            format_func=format_func,
+        )
+        return selected if selected is not None else current
+
+    st.markdown("#### ✨ Choose your property profile")
+    st.caption("Tap visual chips to set the remaining details - no sliders required.")
+    profile_1, profile_2 = st.columns(2)
+    with profile_1:
+        floors = safe_int(visual_picker("🏗️ Building floors", [3, 5, 10, 15, 20, 30, 45, 60], "pp_floors", 20), 20)
+        size = safe_int(visual_picker("📐 Property size", [480, 650, 750, 900, 1200, 1400, 1800, 2500, 3200], "pp_size", 900,
+                                       lambda value: f"{value:,} sq.ft."), 900)
+        total_units = safe_int(visual_picker("🏘️ Total units", [50, 100, 200, 300, 450, 600, 800, 1200], "pp_total_units", 500), 500)
+    with profile_2:
+        completion_year = safe_int(visual_picker("🗓️ Completion year", [2000, 2005, 2010, 2012, 2015, 2016, 2020, 2022, 2025], "pp_completion_year", 2015), 2015)
+        tenure = visual_picker("🔑 Tenure", TENURE_OPTIONS, "pp_tenure", "Freehold")
+        land_title = visual_picker("📜 Land title", LAND_OPTIONS, "pp_land_title", "Non Bumi Lot")
+        floor_range = visual_picker("⬆️ Floor range", FLOOR_RANGE_OPTIONS, "pp_floor_range", "-")
+
     # State map + dropdown
     # -------------------------------------------------------------
     st.divider()
@@ -1481,7 +1318,7 @@ with tab_predict:
             layers=[layer],
             initial_view_state=view_state,
             views=[frozen_view],
-            map_style="dark",
+            map_style="light",
             map_provider="carto",
             tooltip={
                 "text": (
@@ -1510,13 +1347,8 @@ with tab_predict:
             st.rerun()
 
     with picker_col:
-        state_index = (
-            STATE_OPTIONS.index(current_state) if current_state in STATE_OPTIONS else 0
-        )
-
-        state = st.selectbox(
-            "Selected state", STATE_OPTIONS, index=state_index, key="state_dropdown",
-        )
+        st.markdown("##### Select a market")
+        state = visual_picker("State", STATE_OPTIONS, "state_dropdown", current_state)
 
         if state != st.session_state.get("map_selected_state"):
             st.session_state["map_selected_state"] = state
