@@ -1,7 +1,8 @@
 import random
 import time
+import urllib.parse
 from pathlib import Path
-
+ 
 import numpy as np
 import pandas as pd
 import pydeck as pdk
@@ -9,16 +10,16 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
-
+ 
 import backend
-
-
+ 
+ 
 # ---------------------------------------------------------------------
 # Colour palette (used across every Plotly chart + custom HTML widgets)
 # ---------------------------------------------------------------------
 PALETTE = ["#22C55E", "#3B82F6", "#F59E0B", "#EC4899", "#8B5CF6", "#06B6D4"]
 CARD_COLORS = ["#22C55E", "#3B82F6", "#F59E0B", "#EC4899"]
-
+ 
 PLOTLY_LAYOUT = dict(
     template="plotly_white",
     paper_bgcolor="rgba(0,0,0,0)",
@@ -29,8 +30,8 @@ PLOTLY_LAYOUT = dict(
     margin=dict(l=10, r=10, t=45, b=10),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
 )
-
-
+ 
+ 
 # ---------------------------------------------------------------------
 # App configuration
 # ---------------------------------------------------------------------
@@ -39,7 +40,7 @@ st.set_page_config(
     page_icon="🏢",
     layout="wide",
 )
-
+ 
 # ---------------------------------------------------------------------
 # Global theme: compact spacing + colourful accents
 # ---------------------------------------------------------------------
@@ -83,7 +84,7 @@ st.markdown(
           transform: translateY(-2px);
           box-shadow: 0 14px 28px -16px rgba(109,74,255,.75) !important;
       }
-
+ 
       /* Colourful tab bar */
       button[data-baseweb="tab"] {
           border-radius: 10px 10px 0 0 !important;
@@ -97,7 +98,7 @@ st.markdown(
       button[data-baseweb="tab"][aria-selected="true"] {
           background: #f0ebff !important;
       }
-
+ 
       /* Pills / multiselect chips get a splash of colour */
       span[data-baseweb="tag"] {
           background: linear-gradient(135deg,#7c5cff,#ff72ad) !important;
@@ -123,7 +124,7 @@ st.markdown(
           padding: 8px;
           box-shadow: 0 18px 34px -30px rgba(45,34,89,.55);
       }
-
+ 
       /* Compact metric cards */
       .mini-card {
           border-radius: 14px;
@@ -151,7 +152,19 @@ st.markdown(
           opacity: .8;
           margin-top: 2px;
       }
-
+ 
+      /* Never truncate st.metric values (e.g. full "RM 1,234,567.00"
+         prices) — let them wrap instead of being clipped with an ellipsis
+         in narrow columns. */
+      div[data-testid="stMetricValue"] {
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: unset !important;
+          word-break: break-word;
+          font-size: 1.2rem !important;
+          line-height: 1.25 !important;
+      }
+ 
       div[data-testid="stExpander"] {
           border-radius: 12px !important;
           border: 1px solid rgba(109,74,255,0.20) !important;
@@ -174,8 +187,8 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
+ 
+ 
 def mini_metric(label, value, sub=None, color="#3B82F6"):
     """Render one compact, colourful metric card."""
     sub_html = f'<div class="mc-sub">{sub}</div>' if sub else ""
@@ -190,16 +203,16 @@ def mini_metric(label, value, sub=None, color="#3B82F6"):
         """,
         unsafe_allow_html=True,
     )
-
-
+ 
+ 
 def metric_row(items):
     """items: list of (label, value, sub, color) tuples, rendered in equal columns."""
     cols = st.columns(len(items))
     for col, (label, value, sub, color) in zip(cols, items):
         with col:
             mini_metric(label, value, sub, color)
-
-
+ 
+ 
 FACILITY_OPTIONS = backend.FACILITY_OPTIONS
 NEARBY_OPTIONS = backend.NEARBY_OPTIONS
 PROPERTY_TYPES = backend.PROPERTY_TYPES
@@ -208,7 +221,7 @@ LAND_OPTIONS = backend.LAND_OPTIONS
 FLOOR_RANGE_OPTIONS = backend.FLOOR_RANGE_OPTIONS
 STATE_OPTIONS = backend.STATE_OPTIONS
 STATE_COORDS = backend.STATE_COORDS
-
+ 
 # First load trains/tunes the models. backend.load_artifacts() is cached,
 # so subsequent Streamlit reruns do not retrain the models.
 try:
@@ -217,7 +230,7 @@ except Exception as exc:
     st.error("The model could not be loaded.")
     st.exception(exc)
     st.stop()
-
+ 
 get_listings = backend.get_listings
 get_listing = backend.get_listing
 get_state_summary = backend.get_state_summary
@@ -227,17 +240,17 @@ get_tuning_results = backend.get_tuning_results
 get_tuning_results = backend.get_tuning_results
 get_data_quality = backend.get_data_quality
 predict = backend.predict
-
-
+ 
+ 
 # ---------------------------------------------------------------------
 # Small UI helpers
 # ---------------------------------------------------------------------
 def money(value):
     if value is None or pd.isna(value):
         return "—"
-    return f"RM {float(value):,.0f}"
-
-
+    return f"RM {float(value):,.2f}"
+ 
+ 
 def render_price_reveal(prediction, price_per_sqft=None, bracket=None):
     sqft_line = (
         f"RM {price_per_sqft:,.0f} / sq.ft."
@@ -249,7 +262,7 @@ def render_price_reveal(prediction, price_per_sqft=None, bracket=None):
         if bracket
         else ""
     )
-
+ 
     html = f"""
     <div class="price-card">
       <div class="price-label">Predicted Market Price</div>
@@ -304,15 +317,15 @@ def render_price_reveal(prediction, price_per_sqft=None, bracket=None):
         if (!start) start = ts;
         const progress = Math.min((ts - start) / duration, 1);
         const eased = 1 - Math.pow(1 - progress, 3);
-        el.textContent = "RM " + Math.round(eased * target).toLocaleString();
+        el.textContent = "RM " + (eased * target).toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
         if (progress < 1) requestAnimationFrame(step);
       }}
       requestAnimationFrame(step);
     </script>
     """
     components.html(html, height=185)
-
-
+ 
+ 
 def heat_to_rgb(heat):
     stops = [
         (0.00, (37, 99, 235)),
@@ -322,7 +335,7 @@ def heat_to_rgb(heat):
         (1.00, (239, 68, 68)),
     ]
     heat = max(0.0, min(1.0, float(heat)))
-
+ 
     for (p0, c0), (p1, c1) in zip(stops, stops[1:]):
         if p0 <= heat <= p1:
             t = (heat - p0) / (p1 - p0) if p1 > p0 else 0
@@ -330,10 +343,10 @@ def heat_to_rgb(heat):
                 int(c0[i] + (c1[i] - c0[i]) * t)
                 for i in range(3)
             )
-
+ 
     return stops[-1][1]
-
-
+ 
+ 
 def safe_int(value, default):
     try:
         if value is None or pd.isna(value):
@@ -341,8 +354,8 @@ def safe_int(value, default):
         return int(float(value))
     except Exception:
         return int(default)
-
-
+ 
+ 
 def safe_float(value, default):
     try:
         if value is None or pd.isna(value):
@@ -350,14 +363,14 @@ def safe_float(value, default):
         return float(value)
     except Exception:
         return float(default)
-
-
+ 
+ 
 # ---------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------
-
+ 
 st.divider()
-
+ 
 st.markdown(
     """
     <div class="app-header">
@@ -368,7 +381,7 @@ st.markdown(
             </div>
         </div>
     </div>
-
+ 
     <style>
       .app-header {
         background: #ffffff;
@@ -401,35 +414,114 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
+ 
 st.divider()
-
+ 
 tab_overview, tab_compare, tab_predict = st.tabs(
     ["📊 Market & Data Quality", "📈 Model Comparison", "🔮 Price Predictor"]
 )
-
+ 
+# Apply-to-model feedback / tab restoration.  The iframe sends a query parameter
+# which causes a real browser navigation.  We immediately restore the predictor tab
+# and display the feedback without requiring a second manual refresh.
+#
+# NOTE: window.location.href triggers a *full* browser reload — the entire
+# Streamlit frontend bundle is re-downloaded and the websocket is
+# re-established before the Python script even starts running again. That
+# can easily take well over a second (slower connections / cold cache make
+# it worse), so a handful of short setTimeout attempts is not reliable: once
+# they run out without finding the tab button, the app is silently left on
+# the first tab ("Market & Data Quality"), which is exactly the "returns to
+# the main page" bug. Use a MutationObserver (fires the instant the tab bar
+# is added to the DOM) backed by a long-lived polling fallback instead of a
+# few fixed-delay guesses.
+restore_predictor = st.query_params.get("restore_predictor", None)
+if restore_predictor == "1":
+    st.query_params.pop("restore_predictor", None)
+    components.html(
+        """
+        <script>
+        (function restorePredictorTab() {
+            const TOTAL_TIMEOUT_MS = 15000;
+            const POLL_INTERVAL_MS = 150;
+            const startedAt = Date.now();
+            let done = false;
+ 
+            function clickPredictor() {
+                if (done) return true;
+                const doc = window.parent.document;
+                const buttons = doc.querySelectorAll('button[data-baseweb="tab"]');
+                for (const button of buttons) {
+                    if ((button.innerText || '').includes('Price Predictor')) {
+                        button.click();
+                        done = true;
+                        return true;
+                    }
+                }
+                return false;
+            }
+ 
+            if (clickPredictor()) return;
+ 
+            // Fires as soon as the tab bar (re)appears in the DOM, which is
+            // typically much faster than polling alone once the reloaded
+            // page starts rendering.
+            const observer = new MutationObserver(() => {
+                if (clickPredictor()) {
+                    observer.disconnect();
+                }
+            });
+            try {
+                observer.observe(window.parent.document.body, {childList: true, subtree: true});
+            } catch (e) {
+                // Parent document not ready yet — polling below still covers us.
+            }
+ 
+            // Backstop in case the observer fires before the button's text
+            // is populated, or misses the change for any reason.
+            const pollId = setInterval(() => {
+                if (clickPredictor() || Date.now() - startedAt > TOTAL_TIMEOUT_MS) {
+                    clearInterval(pollId);
+                    observer.disconnect();
+                }
+            }, POLL_INTERVAL_MS);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+ 
+# If a status survives another Streamlit rerun, show it as a toast.
+studio_apply_status = st.session_state.pop("studio_apply_status", None)
+if studio_apply_status:
+    st.toast(
+        studio_apply_status["message"],
+        icon="✅" if studio_apply_status.get("ok") else "❌",
+    )
+ 
+ 
 # =====================================================================
 # PAGE 1 — MARKET OVERVIEW + DATA QUALITY
 # =====================================================================
 with tab_overview:
     st.markdown("##### 🗂️ Dataset Overview")
-
+ 
     quality = get_data_quality()
     original_rows = quality["original_rows"]
     usable_rows = quality["usable_rows"]
-
+ 
     metric_row([
         ("Raw rows", f"{original_rows:,}", None, "#3B82F6"),
         ("Usable rows", f"{usable_rows:,}", None, "#22C55E"),
         ("Rows removed", f"{original_rows - usable_rows:,}", None, "#F59E0B"),
         ("Target", "Property Price", None, "#EC4899"),
     ])
-
+ 
     st.caption(
         "Cleaning is documented below. Learned imputation and scaling are fitted "
         "inside the training pipeline to avoid test-data leakage."
     )
-
+ 
     flow = pd.DataFrame([
         {"Step": "Raw source", "Rows": original_rows, "Action": "Read houses.csv"},
         {"Step": "Duplicate check", "Rows": quality["rows_after_duplicates"],
@@ -440,13 +532,13 @@ with tab_overview:
     ])
     with st.expander("🧹 Cleaning audit trail", expanded=True):
         st.dataframe(flow, use_container_width=True, hide_index=True)
-
+ 
     st.divider()
-
+ 
     st.markdown("##### 📋 Cleaned Listings Sample")
-
+ 
     all_listings = get_listings()
-
+ 
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         state_filter = st.multiselect(
@@ -458,14 +550,14 @@ with tab_overview:
             "Filter by Property Type",
             all_listings["available_property_types"],
         )
-
+ 
     result = get_listings(
         states=state_filter or None,
         property_types=type_filter or None,
     )
-
+ 
     filtered = pd.DataFrame(result["listings"])
-
+ 
     if len(filtered):
         display_df = filtered.drop(
             columns=["index"],
@@ -478,11 +570,11 @@ with tab_overview:
         )
     else:
         st.info("No listings match the current filters.")
-
+ 
     st.divider()
-
+ 
     col_c1, col_c2 = st.columns(2)
-
+ 
     with col_c1:
         st.markdown("##### 💰 Average Price by State")
         if len(filtered):
@@ -503,7 +595,7 @@ with tab_overview:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for the selected filters.")
-
+ 
     with col_c2:
         st.markdown("##### 📊 Price Distribution")
         if len(filtered):
@@ -515,7 +607,7 @@ with tab_overview:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for the selected filters.")
-
+ 
     st.markdown("##### 🔗 Price and property-size relationship")
     if len(filtered):
         fig = px.scatter(
@@ -527,13 +619,13 @@ with tab_overview:
                           xaxis_title="Property size (sq. ft.)",
                           yaxis_title="Property price (RM)")
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     st.divider()
-
+ 
     st.markdown("##### 🔍 Data Quality Checks")
-
+ 
     dq1, dq2 = st.columns(2)
-
+ 
     with dq1:
         st.markdown("###### ❓ Missing values before / after filtering")
         missing_df = pd.DataFrame(quality["raw_missing_summary"]).merge(
@@ -549,7 +641,7 @@ with tab_overview:
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No missing-value summary available.")
-
+ 
     with dq2:
         st.markdown("###### 📐 IQR Outlier Analysis")
         outlier_df = pd.DataFrame(quality["outlier_summary"])
@@ -560,54 +652,54 @@ with tab_overview:
                 hide_index=True,
             )
             st.caption("IQR flags are reviewed, not automatically deleted: unusual high-value properties can be valid listings.")
-
+ 
     with st.expander("📍 Address-to-location validation sample"):
         st.caption("Derived State and City are checked against the original address; uncertain values remain explicit rather than guessed.")
         st.dataframe(pd.DataFrame(quality["location_validation"]), use_container_width=True, hide_index=True)
-
-
+ 
+ 
 # =====================================================================
 # PAGE 2 — MODEL COMPARISON
 # =====================================================================
 with tab_compare:
     st.markdown("##### 🤖 Machine Learning Model Comparison")
-
+ 
     comp = get_model_comparison()
     results_df = pd.DataFrame(comp["results"]).copy()
-
+ 
     best_name = comp["best_model_name"]
     baseline_name = comp["baseline_model_name"]
-
+ 
     diag = get_model_diagnostics()
     st.caption(
         "Four regression models compared on the same held-out test set. "
         "RMSE, MAE and R² are the decision metrics. Five-fold cross-validation "
         "is used for parameter tuning on training data only."
     )
-
+ 
     metric_row([
         ("Best Model", best_name, None, "#22C55E"),
         ("Baseline", baseline_name, None, "#3B82F6"),
         ("Test RMSE", money(comp["best_rmse"]), None, "#F59E0B"),
         ("Test R²", f"{comp['best_r2']:.3f}", None, "#EC4899"),
     ])
-
+ 
     with st.expander("📋 Final Test-Set Results table", expanded=False):
         display_cols = [
             "Model", "Role", "CV RMSE", "RMSE", "MAE", "R2"
         ]
         # Backend versions without Role are still supported.
         display_cols = [c for c in display_cols if c in results_df.columns]
-
+ 
         formatted = results_df[display_cols].copy()
         for col in ["CV RMSE", "RMSE", "MAE"]:
             if col in formatted.columns:
                 formatted[col] = formatted[col].map(lambda x: f"RM {x:,.0f}")
         if "R2" in formatted.columns:
             formatted["R2"] = formatted["R2"].map(lambda x: f"{x:.4f}")
-
+ 
         st.dataframe(formatted, use_container_width=True, hide_index=True)
-
+ 
     # These are intentionally separate from the regression table.  The
     # continuous predictions are binned into quartile price bands only as an
     # additional communication aid; they do not determine the winning model.
@@ -625,29 +717,29 @@ with tab_compare:
             st.dataframe(bracket_display, use_container_width=True, hide_index=True)
         else:
             st.info("Supplementary bracket metrics are unavailable.")
-
+ 
     st.divider()
-
+ 
     # ================================================================
     # INTERACTIVE PLOTLY CHARTS — regression diagnostics only
     # ================================================================
     st.markdown("##### 📊 Visual Model Comparison")
-
+ 
     # Prepare test-set predictions and residuals for all four models.
     y_test = np.asarray(diag["y_test"], dtype=float)
     predictions = {
         name: np.asarray(values, dtype=float)
         for name, values in diag["test_predictions"].items()
     }
-
+ 
     residuals = {
         name: y_test - pred
         for name, pred in predictions.items()
     }
-
+ 
     model_order = [name for name in results_df["Model"] if name in predictions]
     model_colors = {name: PALETTE[i % len(PALETTE)] for i, name in enumerate(model_order)}
-
+ 
     chart_options = [
         "⚖️ RMSE & MAE",
         "📈 R² Score",
@@ -655,17 +747,18 @@ with tab_compare:
         "🌊 Residual distribution",
         "🔀 Actual vs Predicted",
         "🧭 Residuals vs Predicted",
+        "🎯 Confusion matrix",
     ]
     if diag.get("feature_importances"):
         chart_options.append("🔑 Feature importance")
-
+ 
     chart_choice = st.radio(
         "Choose a chart",
         chart_options,
         horizontal=True,
         label_visibility="collapsed",
     )
-
+ 
     if chart_choice == "⚖️ RMSE & MAE":
         st.caption("Lower values indicate smaller prediction errors. Hover for exact numbers.")
         rmse_vals = [
@@ -682,7 +775,7 @@ with tab_compare:
         fig.update_layout(**PLOTLY_LAYOUT, height=420, barmode="group",
                            yaxis_title="Error (RM)", title="Regression Error Comparison")
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     elif chart_choice == "📈 R² Score":
         st.caption("Higher values indicate better explanatory performance.")
         r2_vals = [
@@ -703,7 +796,7 @@ with tab_compare:
         )
         fig.update_yaxes(title="R²", range=[0, 1])
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     elif chart_choice == "📦 Residual boxplot":
         st.caption(
             "Residual = Actual − Predicted Price. A tighter box around zero "
@@ -716,7 +809,7 @@ with tab_compare:
         fig.update_layout(**PLOTLY_LAYOUT, height=460, showlegend=False,
                            yaxis_title="Residual (RM)", title="Residual Error Distribution")
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     elif chart_choice == "🌊 Residual distribution":
         st.caption("How prediction errors are distributed for each model.")
         fig = go.Figure()
@@ -728,7 +821,7 @@ with tab_compare:
                            xaxis_title="Residual (RM)", yaxis_title="Frequency",
                            title="Residual Distribution")
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     elif chart_choice == "🔀 Actual vs Predicted":
         st.caption(
             f"Best model: {best_name}. Points closer to the dashed 45° line "
@@ -748,7 +841,7 @@ with tab_compare:
                            xaxis_title="Actual Price (RM)", yaxis_title="Predicted Price (RM)",
                            title=f"Actual vs Predicted — {best_name}")
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     elif chart_choice == "🧭 Residuals vs Predicted":
         st.caption(
             f"Best model: {best_name}. Checks whether errors change "
@@ -763,6 +856,47 @@ with tab_compare:
                            xaxis_title="Predicted Price (RM)", yaxis_title="Residual (RM)",
                            title=f"Residuals vs Predicted — {best_name}")
         st.plotly_chart(fig, use_container_width=True)
+ 
+    elif chart_choice == "🎯 Confusion matrix":
+        st.caption(
+            f"Supplementary classification-style view for the best model ({best_name}). "
+            "Predicted prices are grouped into the same four data-derived price brackets; "
+            "rows are actual brackets and columns are predicted brackets."
+        )
+        cm = np.asarray(diag.get("bracket_confusion_matrix", []), dtype=int)
+        labels = list(diag.get("price_bin_labels", []))
+
+        if cm.size and labels and cm.shape[0] == len(labels) and cm.shape[1] == len(labels):
+            # Keep the matrix square and use the same bracket labels as the backend.
+            fig = go.Figure(
+                data=go.Heatmap(
+                    z=cm,
+                    x=labels,
+                    y=labels,
+                    text=cm,
+                    texttemplate="%{text}",
+                    textfont=dict(size=14),
+                    colorscale="Blues",
+                    colorbar=dict(title="Count"),
+                    hovertemplate=(
+                        "Actual: %{y}<br>Predicted: %{x}<br>Count: %{z}<extra></extra>"
+                    ),
+                )
+            )
+            fig.update_layout(
+                **PLOTLY_LAYOUT,
+                height=520,
+                title=f"Confusion Matrix — {best_name}",
+                xaxis_title="Predicted Price Bracket",
+                yaxis_title="Actual Price Bracket",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(
+                f"Bracket accuracy: {float(diag.get('bracket_accuracy', 0.0)):.1%} · "
+                f"Macro F1: {float(diag.get('bracket_f1', 0.0)):.1%}"
+            )
+        else:
+            st.info("Confusion matrix data is unavailable.")
 
     elif chart_choice == "🔑 Feature importance":
         importance_df = (
@@ -778,21 +912,21 @@ with tab_compare:
                            xaxis_title="Importance", yaxis_title=None,
                            title=f"Top 15 Feature Importances — {best_name}")
         st.plotly_chart(fig, use_container_width=True)
-
+ 
     st.divider()
-
+ 
     with st.expander("⚙️ Parameter configuration"):
         tuning_df = pd.DataFrame(get_tuning_results())
         if len(tuning_df):
             st.dataframe(tuning_df, use_container_width=True, hide_index=True)
-
+ 
     st.caption(f"Baseline: {baseline_name}. The final model is selected by held-out test RMSE, supported by MAE and R².")
-
-
+ 
+ 
 # PAGE 3 — PRICE PREDICTOR
 # =====================================================================
 with tab_predict:
-
+ 
     # -------------------------------------------------------------
     # Setup: 3D asset map + a single helper that pushes a bundle of
     # values into every widget's session_state key at once, so a
@@ -801,18 +935,18 @@ with tab_predict:
     # the tab reruns.
     # -------------------------------------------------------------
     STATIC_MODELS_DIR = Path(__file__).resolve().parent / "static" / "models"
-
+ 
     MODEL_ASSET_MAP = {
         "Condominium": "condominium.glb",
         "Apartment": "apartment.glb",
         "Flat": "flat.glb",
         "Penthouse": "penthouse.glb",
         "Townhouse": "townhouse.glb",
-        "Service Residence": None,
-        "Studio": None,
-        "Others": None,
+        "Service Residence": "service_residence.glb",
+        "Studio": "studio.glb",
+        "Others": "apartment_v2.glb",
     }
-
+ 
     def get_model_asset_url(ptype):
         filename = MODEL_ASSET_MAP.get(ptype)
         if not filename:
@@ -823,7 +957,7 @@ with tab_predict:
         # *relative* path "app/static/..." (no leading slash) — see
         # https://docs.streamlit.io/develop/concepts/configuration/serving-static-files
         return f"app/static/models/{filename}"
-
+ 
     FIELD_KEYS = {
         "bedroom": "pp_bedroom",
         "bathroom": "pp_bathroom",
@@ -839,38 +973,165 @@ with tab_predict:
         "nearby": "pp_nearby",
     }
 
-    # Read query params using st.query_params
+    # Standardised starting profile for the Price Predictor.  The Reset button
+    # always returns the predictor to this exact profile rather than relying
+    # on whatever values happened to be left in Streamlit's session state.
+    DEFAULT_PREDICTOR = {
+        "property_type": "Condominium",
+        "bedroom": 3,
+        "bathroom": 2,
+        "parking": 1,
+        "floors": 20,
+        "size": 900,
+        "total_units": 500,
+        "completion_year": 2015,
+        "tenure": "Freehold",
+        "land_title": "Non Bumi Lot",
+        "floor_range": "-",
+        "state": "Selangor",
+        "city": "Not sure / Other",
+        "facilities": [],
+        "nearby": [],
+        "price": None,
+    }
+ 
+    # Read query params sent by the embedded 3D editor.  The old implementation
+    # navigated the whole browser window, which made Streamlit return to the first
+    # tab after every "Apply to model" click.  We still use the query string as a
+    # small bridge from the iframe to Python, but keep the current app state and
+    # explicitly restore the Price Predictor tab after the rerun.
     studio_field = st.query_params.get("studio_field", None)
     studio_value = st.query_params.get("studio_value", None)
-
+ 
     if studio_field in FIELD_KEYS and studio_value is not None:
         try:
             val = int(float(studio_value))
-            
-            # 1. Directly overwrite the session state key Streamlit uses for inputs
+            field_limits = {
+                "bedroom": (0, 20),
+                "bathroom": (0, 20),
+                "parking": (0, 20),
+                "size": (1, 200000),
+            }
+            if studio_field in field_limits:
+                low, high = field_limits[studio_field]
+                if not (low <= val <= high):
+                    raise ValueError(
+                        f"{studio_field.title()} must be between {low:,} and {high:,}."
+                    )
+ 
             st.session_state[FIELD_KEYS[studio_field]] = val
-            
-            # 2. Sync floorplan editor state if present
+ 
             if studio_field in {"bedroom", "bathroom", "parking"}:
                 st.session_state[f"fp_editor_{studio_field}"] = val
-                
+ 
+            st.session_state["studio_apply_status"] = {
+                "ok": True,
+                "message": f"{studio_field.replace('_', ' ').title()} updated successfully to {val:,}.",
+            }
+        except (TypeError, ValueError) as exc:
+            st.session_state["studio_apply_status"] = {
+                "ok": False,
+                "message": f"Could not apply the change: {exc}",
+            }
+        finally:
+            # Only remove the bridge parameters.  Do not clear unrelated state.
+            st.query_params.pop("studio_field", None)
+            st.query_params.pop("studio_value", None)
+ 
+        # The navigation that brought the query parameters here already caused
+        # Streamlit to rerun.  Do NOT call st.rerun() again: that would immediately
+        # consume/destroy the toast before the browser can display it.
+        status = st.session_state.get("studio_apply_status")
+        if status:
+            st.toast(
+                status["message"],
+                icon="✅" if status.get("ok") else "❌",
+            )
+ 
+    def _normalise_option_values(values, options):
+        """Return only valid option names, accepting lists/tuples/CSV strings."""
+        if values is None:
+            return []
+        if isinstance(values, str):
+            values = [v.strip() for v in values.split(",") if v.strip()]
+        elif not isinstance(values, (list, tuple, set)):
+            values = [values]
+        valid = set(options)
+        return [v for v in values if v in valid]
+
+    def _listing_has_flag(value):
+        """Handle numeric, boolean, and common string representations of a 1 flag."""
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return value.strip().lower() in {
+                "1", "1.0", "true", "yes", "y", "x", "on", "available"
+            }
+        try:
+            if pd.isna(value):
+                return False
         except (TypeError, ValueError):
             pass
-        finally:
-            # Clear params to prevent persistent loops on manual refreshes
-            st.query_params.clear()
+        try:
+            return bool(int(value))
+        except (TypeError, ValueError):
+            return bool(value)
 
-        st.number_input("Bedrooms", min_value=0, max_value=20, key="bedroom")
-        st.number_input("Bathrooms", min_value=0, max_value=20, key="bathroom")
-        st.number_input("Parking", min_value=0, max_value=20, key="parking")
-        st.number_input("Size", min_value=1, max_value=200000, key="size")
+    def _column_lookup(row):
+        """Case/spacing/underscore-insensitive lookup for listing columns."""
+        return {
+            str(k).strip().lower().replace("_", "").replace(" ", ""): k
+            for k in row.keys()
+        }
 
-        # Force an immediate rerun so the applied value shows up right away
-        # instead of waiting for the next unrelated widget interaction.
-        st.rerun()
+    def _listing_amenities(row, options, prefixes):
+        """
+        Read amenity flags from a listing robustly.
+
+        The dataset normally uses Facility_<name> / Has_<name>, but this also
+        tolerates spaces/underscores/case differences in the actual column name.
+        """
+        lookup = _column_lookup(row)
+        selected = []
+
+        for option in options:
+            option_key = str(option).strip().lower().replace("_", "").replace(" ", "")
+            found = False
+
+            for prefix in prefixes:
+                prefix_key = prefix.lower().replace("_", "").replace(" ", "")
+                candidate_key = prefix_key + option_key
+                actual_key = lookup.get(candidate_key)
+
+                if actual_key is not None and _listing_has_flag(row.get(actual_key)):
+                    found = True
+                    break
+
+            # Also support a direct amenity column such as "Facilities" or
+            # "Nearby Amenities" containing comma-separated names.
+            if not found:
+                for direct_name in (
+                    "facilities" if prefixes == ("Facility_",) else "nearby amenities",
+                    "nearby",
+                ):
+                    actual_key = lookup.get(
+                        direct_name.lower().replace("_", "").replace(" ", "")
+                    )
+                    if actual_key is not None:
+                        direct_values = _normalise_option_values(
+                            row.get(actual_key), options
+                        )
+                        if option in direct_values:
+                            found = True
+                            break
+
+            if found:
+                selected.append(option)
+
+        return selected
 
     def apply_field_values(values):
-        """Push a full bundle of values into every widget key at once."""
+        """Push one complete property bundle into every predictor widget."""
         ptype = values.get("property_type")
         if ptype in PROPERTY_TYPES:
             st.session_state["predict_ptype_idx"] = PROPERTY_TYPES.index(ptype)
@@ -886,11 +1147,19 @@ with tab_predict:
                 city_val if city_val in ART.city_options else "Not sure / Other"
             )
 
+        # Facilities and nearby amenities are part of the same bundle as all
+        # other predictor inputs. Set them before the pills are instantiated.
         for field, key in FIELD_KEYS.items():
-            if field in values:
-                st.session_state[key] = values[field]
-                if field in {"bedroom", "bathroom", "parking"}:
-                    st.session_state[f"fp_editor_{field}"] = int(values[field])
+            if field not in values:
+                continue
+            value = values[field]
+            if field == "facilities":
+                value = _normalise_option_values(value, FACILITY_OPTIONS)
+            elif field == "nearby":
+                value = _normalise_option_values(value, NEARBY_OPTIONS)
+            st.session_state[key] = list(value) if isinstance(value, (list, tuple, set)) else value
+            if field in {"bedroom", "bathroom", "parking"}:
+                st.session_state[f"fp_editor_{field}"] = int(value)
 
         st.session_state["autofill_price"] = values.get("price")
 
@@ -934,7 +1203,7 @@ with tab_predict:
             nearby=["Bus Stop", "School"],
         ),
     }
-
+ 
     PTYPE_VISUALS = {
         "Condominium":        {"emoji": "🏙️", "floors": 9,  "grad": ("#22C55E", "#3B82F6")},
         "Apartment":          {"emoji": "🏢", "floors": 6,  "grad": ("#3B82F6", "#8B5CF6")},
@@ -945,13 +1214,13 @@ with tab_predict:
         "Townhouse":          {"emoji": "🏘️", "floors": 3,  "grad": ("#22C55E", "#F59E0B")},
         "Others":              {"emoji": "🏗️", "floors": 4,  "grad": ("#64748B", "#3B82F6")},
     }
-
+ 
     st.markdown("##### 🔮 Condominium Price Prediction")
     st.caption(
         "Enter property characteristics and the tuned best-performing "
         f"model ({best_name}) will estimate the indicative market price."
     )
-
+ 
     # -------------------------------------------------------------
     # Scoped CSS for this tab only
     # -------------------------------------------------------------
@@ -976,7 +1245,7 @@ with tab_predict:
         """
         for i, values in enumerate(PRESETS.values())
     )
-
+ 
     st.markdown(
         f"""
         <style>
@@ -1009,13 +1278,13 @@ with tab_predict:
     # -------------------------------------------------------------
     with st.expander("📋 Or autofill from an existing listing", expanded=False):
         listing_pool = get_listings()["listings"]
-
+ 
         if listing_pool:
             col_a1, col_a2 = st.columns([4, 1])
-
+ 
             with col_a1:
                 listing_ids = [row["index"] for row in listing_pool]
-
+ 
                 def listing_label(idx):
                     row = next(
                         (r for r in listing_pool if r["index"] == idx),
@@ -1028,18 +1297,18 @@ with tab_predict:
                         f"{row['Property Type']} · "
                         f"{row['Property Size']:.0f} sqft"
                     )
-
+ 
                 selected_listing = st.selectbox(
                     "Choose a sample listing",
                     listing_ids,
                     format_func=listing_label,
                 )
-
+ 
             with col_a2:
                 st.write("")
                 st.write("")
                 autofill_clicked = st.button("Set", use_container_width=True)
-
+ 
             if autofill_clicked:
                 loaded = get_listing(selected_listing)
                 autofill_values = {
@@ -1068,14 +1337,12 @@ with tab_predict:
                     ),
                     "state": loaded.get("State"),
                     "city": loaded.get("City"),
-                    "facilities": [
-                        f for f in FACILITY_OPTIONS
-                        if loaded.get(f"Facility_{f}") == 1
-                    ],
-                    "nearby": [
-                        n for n in NEARBY_OPTIONS
-                        if loaded.get(f"Has_{n}") == 1
-                    ],
+                    "facilities": _listing_amenities(
+                        loaded, FACILITY_OPTIONS, ("Facility_",)
+                    ),
+                    "nearby": _listing_amenities(
+                        loaded, NEARBY_OPTIONS, ("Has_",)
+                    ),
                     "price": loaded.get("price"),
                 }
                 apply_field_values(autofill_values)
@@ -1083,9 +1350,9 @@ with tab_predict:
                 st.rerun()
         else:
             st.info("No sample listings are available.")
-
+ 
     autofill_price = st.session_state.get("autofill_price")
-
+ 
     # -------------------------------------------------------------
     # Build your property in 3D — one unified studio that combines what
     # used to be three separate blocks (3D builder, property showcase,
@@ -1095,18 +1362,18 @@ with tab_predict:
     # bedroom-bathroom-parking inputs across sections.
     # -------------------------------------------------------------
     if "predict_ptype_idx" not in st.session_state:
-        st.session_state["predict_ptype_idx"] = 0
-
+        st.session_state["predict_ptype_idx"] = PROPERTY_TYPES.index(DEFAULT_PREDICTOR["property_type"])
+ 
     ptype_idx = st.session_state["predict_ptype_idx"] % len(PROPERTY_TYPES)
     property_type = PROPERTY_TYPES[ptype_idx]
     visual = PTYPE_VISUALS.get(property_type, PTYPE_VISUALS["Others"])
     color_a, color_b = visual["grad"]
-
+ 
     studio_model_url = get_model_asset_url(property_type)
     studio_values = {
-        "bedroom": safe_int(st.session_state.get("pp_bedroom", 3), 3),
-        "bathroom": safe_int(st.session_state.get("pp_bathroom", 2), 2),
-        "parking": safe_int(st.session_state.get("pp_parking", 1), 1),
+        "bedroom": safe_int(st.session_state.get("pp_bedroom", DEFAULT_PREDICTOR["bedroom"]), 3),
+        "bathroom": safe_int(st.session_state.get("pp_bathroom", DEFAULT_PREDICTOR["bathroom"]), 2),
+        "parking": safe_int(st.session_state.get("pp_parking", DEFAULT_PREDICTOR["parking"]), 1),
         "size": safe_int(st.session_state.get("pp_size", 900), 900),
     }
     studio_labels = {
@@ -1120,7 +1387,7 @@ with tab_predict:
         f'<span>{icon}</span><b>{label}</b><em>{studio_values[field]:,} {unit}</em></button>'
         for field, (icon, label, unit) in studio_labels.items()
     )
-
+ 
     # Colourised, per-type animated building — used both as the "no .glb
     # bundled yet" fallback and, visually, as the same building shown in
     # the old Property Showcase block, so nothing is lost by merging.
@@ -1175,23 +1442,33 @@ with tab_predict:
       function backdropClose(event) {{ if (event.target.id === 'studioShell') closeEditor(); }}
         function saveEditor() {{
             if (!active) return;
+ 
             const input = document.getElementById('drawerInput');
-            const val = parseInt(input.value, 10);
-            const cleanVal = isNaN(val) ? input.value : String(val);
-            
-            // Construct new URL with parameters
-            const parentUrl = new URL(window.parent.location.href);
-            parentUrl.searchParams.set('studio_field', active);
-            parentUrl.searchParams.set('studio_value', cleanVal);
-            
-            // This iframe is sandboxed by Streamlit without "allow-top-navigation",
-            // so directly assigning window.parent.location.href is silently
-            // blocked by the browser. "allow-same-origin" is granted though, so
-            // we inject a tiny script into the parent document instead — running
-            // there (outside the sandbox) it's free to navigate normally.
-            const bridge = window.parent.document.createElement('script');
-            bridge.textContent = 'window.location.href = ' + JSON.stringify(parentUrl.toString()) + ';';
-            window.parent.document.body.appendChild(bridge);
+            const item = meta[active];
+            const val = Number(input.value);
+ 
+            if (!Number.isFinite(val) || !Number.isInteger(val)) {{
+                alert('Please enter a valid whole number.');
+                input.focus();
+                return;
+            }}
+            if (val < item[3] || val > item[4]) {{
+                alert('Please enter a value between ' + item[3].toLocaleString() +
+                      ' and ' + item[4].toLocaleString() + '.');
+                input.focus();
+                return;
+            }}
+ 
+            // Refresh only the selected card. Do NOT navigate or rerun Streamlit.
+            values[active] = val;
+            const card = document.querySelector('.card-' + active);
+            if (card) {{
+                const valueElement = card.querySelector('em');
+                if (valueElement) valueElement.textContent = val.toLocaleString() + ' ' + item[2];
+                card.classList.add('card-updated');
+                setTimeout(() => card.classList.remove('card-updated'), 500);
+            }}
+            closeEditor();
         }}
     </script>
     <style>
@@ -1203,7 +1480,107 @@ with tab_predict:
       .orbit {{ position:absolute; border:1px dashed rgba(109,74,255,.25); border-radius:50%; left:50%; top:55%; transform:translate(-50%,-50%); }} .orbit-one {{ width:340px; height:130px; }} .orbit-two {{ width:270px; height:100px; transform:translate(-50%,-50%) rotate(-19deg); }}
       .studio-cards {{ position:absolute; inset:0; z-index:4; pointer-events:none; }} .studio-card {{ position:absolute; display:flex; gap:7px; align-items:center; text-align:left; padding:9px 12px; border:1px solid rgba(109,74,255,.17); border-radius:16px; background:rgba(255,255,255,.88); box-shadow:0 16px 28px -19px rgba(67,47,143,.45); color:#293451; cursor:pointer; transition:transform .2s, box-shadow .2s; pointer-events:auto; }} .studio-card:hover {{ transform:translateY(-4px) scale(1.03); box-shadow:0 18px 30px -15px rgba(109,74,255,.4); }} .studio-card span {{ font-size:21px; }} .studio-card b,.studio-card em {{ display:block; font-style:normal; }} .studio-card b {{ font-size:11px; }} .studio-card em {{ color:#7865b6; font-size:10px; margin-top:2px; }} .card-bedroom {{ left:10%; top:25%; }} .card-bathroom {{ right:8%; top:21%; }} .card-parking {{ right:10%; bottom:20%; }} .card-size {{ left:15%; bottom:18%; }}
       .model-badge {{ position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:4; color:#624fa4; font-size:10px; font-weight:900; padding:7px 10px; border-radius:999px; background:rgba(255,255,255,.8); }}
-      .input-drawer {{ position:absolute; z-index:8; left:20px; top:50%; width:258px; padding:24px; border-radius:22px; background:rgba(255,255,255,.96); box-shadow:0 25px 45px -22px rgba(68,45,142,.45); opacity:0; transform:translate(-130%,-50%); transition:opacity .42s ease,transform .58s cubic-bezier(.2,.9,.2,1); pointer-events:none; }} .editing .input-drawer {{ opacity:1; transform:translate(0,-50%); pointer-events:auto; }} .drawer-close {{ position:absolute; right:12px; top:10px; border:0; background:#f1edff; border-radius:50%; width:26px; height:26px; font-size:20px; cursor:pointer; color:#684dd1; }} .drawer-icon {{ font-size:31px; }} .input-drawer h3 {{ margin:7px 0 5px; font-size:22px; }} .input-drawer small {{ color:#68738c; line-height:1.3; }} .input-drawer input {{ width:100%; margin:17px 0 10px; padding:12px; border:1px solid #dfd7ff; border-radius:13px; color:#303b59; font-size:18px; font-weight:800; outline-color:#7456ff; }} .drawer-save {{ width:100%; border:0; border-radius:13px; padding:12px; color:#fff; font-weight:800; background:linear-gradient(105deg,#6d4aff,#ff68a8); cursor:pointer; }}
+      /* Drawer styling matched to the updated native app.py editor:
+         same white card, purple/pink accent, typography, spacing and shadow,
+         while keeping the original slide-in drawer interaction. */
+      .input-drawer {{
+          position:absolute;
+          z-index:8;
+          left:20px;
+          top:50%;
+          width:278px;
+          padding:24px;
+          border:1px solid rgba(109,74,255,.12);
+          border-radius:22px;
+          background:rgba(255,255,255,.98);
+          box-shadow:0 25px 45px -22px rgba(68,45,142,.45);
+          opacity:0;
+          transform:translate(-130%,-50%);
+          transition:opacity .42s ease,transform .58s cubic-bezier(.2,.9,.2,1);
+          pointer-events:none;
+      }}
+      .editing .input-drawer {{
+          opacity:1;
+          transform:translate(0,-50%);
+          pointer-events:auto;
+      }}
+      .drawer-close {{
+          position:absolute;
+          right:12px;
+          top:10px;
+          border:0;
+          background:#f1edff;
+          border-radius:50%;
+          width:28px;
+          height:28px;
+          font-size:20px;
+          line-height:28px;
+          cursor:pointer;
+          color:#684dd1;
+          transition:transform .16s ease,background .16s ease;
+      }}
+      .drawer-close:hover {{
+          transform:scale(1.06);
+          background:#e9e2ff;
+      }}
+      .drawer-icon {{
+          font-size:31px;
+          line-height:1;
+          margin-bottom:2px;
+      }}
+      .input-drawer p {{
+          color:#7759d7;
+          font-size:10px;
+          font-weight:900;
+          letter-spacing:.14em;
+          margin:4px 0 0;
+      }}
+      .input-drawer h3 {{
+          margin:5px 0 5px;
+          font-size:22px;
+          font-weight:800;
+          color:#283551;
+          line-height:1.15;
+      }}
+      .input-drawer small {{
+          color:#68738c;
+          line-height:1.3;
+          display:block;
+      }}
+      .input-drawer input {{
+          width:100%;
+          margin:17px 0 10px;
+          padding:12px;
+          border:1px solid #dfd7ff;
+          border-radius:13px;
+          background:#fff;
+          color:#303b59;
+          font-size:18px;
+          font-weight:800;
+          outline:none;
+          box-shadow:0 8px 20px -18px rgba(45,34,89,.45);
+          transition:border-color .16s ease,box-shadow .16s ease;
+      }}
+      .input-drawer input:focus {{
+          border-color:#7456ff;
+          box-shadow:0 0 0 3px rgba(116,86,255,.10),0 8px 20px -18px rgba(45,34,89,.45);
+      }}
+      .drawer-save {{
+          width:100%;
+          border:0;
+          border-radius:13px;
+          padding:12px;
+          color:#fff;
+          font-weight:800;
+          background:linear-gradient(105deg,#6d4aff,#ff68a8);
+          cursor:pointer;
+          box-shadow:0 10px 20px -14px rgba(109,74,255,.75);
+          transition:transform .16s ease,box-shadow .16s ease;
+      }}
+      .drawer-save:hover {{
+          transform:translateY(-2px);
+          box-shadow:0 14px 24px -14px rgba(109,74,255,.85);
+      }}
       .studio-building3d {{ position:relative; width:100px; height:150px; transform-style:preserve-3d; animation: studioSpin3d 9s linear infinite; }}
       @keyframes studioSpin3d {{ from {{ transform: rotateY(0deg) rotateX(8deg); }} to {{ transform: rotateY(360deg) rotateX(8deg); }} }}
       @keyframes studioFloorGlow {{ 0%, 100% {{ opacity: 0.75; }} 50% {{ opacity: 1; }} }}
@@ -1212,7 +1589,20 @@ with tab_predict:
       .sbside {{ width:50px; height:150px; transform: rotateY(90deg) translateZ(25px) translateX(25px); }}
       .sbtop {{ width:100px; height:50px; transform: rotateX(90deg) translateZ(25px) translateY(-50px); opacity: 0.85; }}
       .bfloor {{ flex:1; border-radius:2px; box-shadow: 0 0 8px rgba(255,255,255,0.18) inset; animation: studioFloorGlow 2.4s ease-in-out infinite; }}
-      @media(max-width:650px) {{ .studio-copy {{ width:55%; }} .studio-copy h2 {{ font-size:22px; }} .studio-stage {{ left:8%; }} .studio-model {{ transform:translateX(-30%); }} .studio-card {{ padding:7px; }} .studio-card b {{ display:none; }} .card-bedroom {{ left:1%; }} .card-size {{ left:2%; }} .card-bathroom {{ right:1%; }} .card-parking {{ right:1%; }} .editing .studio-stage {{ transform:translateX(40%); }} }}
+      @media(max-width:650px) {{
+          .studio-copy {{ width:55%; }}
+          .studio-copy h2 {{ font-size:22px; }}
+          .studio-stage {{ left:8%; }}
+          .studio-model {{ transform:translateX(-30%); }}
+          .studio-card {{ padding:7px; }}
+          .studio-card b {{ display:none; }}
+          .card-bedroom {{ left:1%; }}
+          .card-size {{ left:2%; }}
+          .card-bathroom {{ right:1%; }}
+          .card-parking {{ right:1%; }}
+          .input-drawer {{ width:260px; left:12px; padding:22px; }}
+          .editing .studio-stage {{ transform:translateX(40%); }}
+      }}
     </style>
     """
     st.markdown("#### 🧩 Build your property in 3D")
@@ -1220,9 +1610,9 @@ with tab_predict:
         "Cycle property types with the arrows, tap a floating card to edit a stat, "
         "or pick a preset above — one model, always in sync."
     )
-
+ 
     studio_prev, studio_stage_col, studio_next = st.columns([1, 8, 1])
-
+ 
     with studio_prev:
         st.write("")
         st.markdown('<div class="ptype-cycle-btn">', unsafe_allow_html=True)
@@ -1230,10 +1620,10 @@ with tab_predict:
             st.session_state["predict_ptype_idx"] = (ptype_idx - 1) % len(PROPERTY_TYPES)
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
-
+ 
     with studio_stage_col:
         components.html(studio_html, height=435)
-
+ 
     with studio_next:
         st.write("")
         st.markdown('<div class="ptype-cycle-btn">', unsafe_allow_html=True)
@@ -1241,19 +1631,19 @@ with tab_predict:
             st.session_state["predict_ptype_idx"] = (ptype_idx + 1) % len(PROPERTY_TYPES)
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
-
+ 
     if not studio_model_url:
         st.caption(
             "🧩 No bundled 3D model for this type yet — showing the animated "
             "placeholder. Drop a `.glb` into `static/models/` (see README) to enable the real model."
         )
-
+ 
     # The floating cards' drawer owns bedroom/bathroom/parking/size — read
     # their current values back so the prediction payload stays synced.
     bedroom = safe_int(st.session_state.get("pp_bedroom", 3), 3)
     bathroom = safe_int(st.session_state.get("pp_bathroom", 2), 2)
     parking = safe_int(st.session_state.get("pp_parking", 1), 1)
-
+ 
     def visual_picker(label, options, key, default, format_func=None):
         """Chip-based input for a fast, visual alternative to sliders/selects."""
         current = st.session_state.get(key, default)
@@ -1265,150 +1655,318 @@ with tab_predict:
             format_func=format_func,
         )
         return selected if selected is not None else current
-
+ 
     st.markdown("#### ✨ Choose your property profile")
     st.caption("Tap visual chips to set the remaining details - no sliders required.")
     profile_1, profile_2 = st.columns(2)
     with profile_1:
-        floors = safe_int(visual_picker("🏗️ Building floors", [3, 5, 10, 15, 20, 30, 45, 60], "pp_floors", 20), 20)
-        size = safe_int(visual_picker("📐 Property size", [480, 650, 750, 900, 1200, 1400, 1800, 2500, 3200], "pp_size", 900,
+        floors = safe_int(visual_picker("🏗️ Building floors", [3, 5, 10, 15, 20, 30, 45, 60], "pp_floors", DEFAULT_PREDICTOR["floors"]), 20)
+        size = safe_int(visual_picker("📐 Property size", [480, 650, 750, 900, 1200, 1400, 1800, 2500, 3200], "pp_size", DEFAULT_PREDICTOR["size"],
                                        lambda value: f"{value:,} sq.ft."), 900)
-        total_units = safe_int(visual_picker("🏘️ Total units", [50, 100, 200, 300, 450, 600, 800, 1200], "pp_total_units", 500), 500)
+        total_units = safe_int(visual_picker("🏘️ Total units", [50, 100, 200, 300, 450, 600, 800, 1200], "pp_total_units", DEFAULT_PREDICTOR["total_units"]), 500)
     with profile_2:
-        completion_year = safe_int(visual_picker("🗓️ Completion year", [2000, 2005, 2010, 2012, 2015, 2016, 2020, 2022, 2025], "pp_completion_year", 2015), 2015)
-        tenure = visual_picker("🔑 Tenure", TENURE_OPTIONS, "pp_tenure", "Freehold")
-        land_title = visual_picker("📜 Land title", LAND_OPTIONS, "pp_land_title", "Non Bumi Lot")
-        floor_range = visual_picker("⬆️ Floor range", FLOOR_RANGE_OPTIONS, "pp_floor_range", "-")
-
+        completion_year = safe_int(visual_picker("🗓️ Completion year", [2000, 2005, 2010, 2012, 2015, 2016, 2020, 2022, 2025], "pp_completion_year", DEFAULT_PREDICTOR["completion_year"]), 2015)
+        tenure = visual_picker("🔑 Tenure", TENURE_OPTIONS, "pp_tenure", DEFAULT_PREDICTOR["tenure"])
+        land_title = visual_picker("📜 Land title", LAND_OPTIONS, "pp_land_title", DEFAULT_PREDICTOR["land_title"])
+        floor_range = visual_picker("⬆️ Floor range", FLOOR_RANGE_OPTIONS, "pp_floor_range", DEFAULT_PREDICTOR["floor_range"])
+ 
     # State map + dropdown
     # -------------------------------------------------------------
+    # Each Malaysian state is rendered as its actual polygon and gets its own
+    # colour. The polygons are pickable, so clicking the state itself selects
+    # it and updates the detail panel on the right.
     st.divider()
     st.markdown("#### 📍 Location")
-
+ 
     state_summary = get_state_summary()
-
     map_states = [state for state in STATE_OPTIONS if state in STATE_COORDS]
+ 
+    current_state = st.session_state.get("map_selected_state", DEFAULT_PREDICTOR["state"])
+    if current_state not in STATE_OPTIONS:
+        current_state = "Selangor"
+    if st.session_state.get("state_dropdown") not in STATE_OPTIONS:
+        st.session_state["state_dropdown"] = current_state
+ 
+    # Use Malaysia's national UPI Admin1 polygon service so ALL 16
+    # states/federal territories have real boundaries. The previous
+    # Peninsular-only service did not contain Sabah, Sarawak, Labuan,
+    # Kuala Lumpur or Putrajaya, which is why those five appeared as dots.
+    state_geojson_base = (
+        "https://mygos.mygeoportal.gov.my/gisserver/rest/services/"
+        "UPI/UPI/MapServer/0/query"
+    )
 
-    max_avg = max(
-        [state_summary.get(state, {}).get("avg_price", 0) for state in map_states] or [1]
-    ) or 1
+    # Distinct colours make neighbouring states easy to tell apart.
+    STATE_MAP_COLORS = {
+        "Johor": [34, 197, 94, 205],
+        "Kedah": [59, 130, 246, 205],
+        "Kelantan": [245, 158, 11, 205],
+        "Melaka": [236, 72, 153, 205],
+        "Negeri Sembilan": [139, 92, 246, 205],
+        "Pahang": [6, 182, 212, 205],
+        "Penang": [239, 68, 68, 205],
+        "Perak": [16, 185, 129, 205],
+        "Perlis": [234, 88, 12, 205],
+        "Sabah": [168, 85, 247, 205],
+        "Sarawak": [14, 165, 233, 205],
+        "Selangor": [217, 70, 239, 205],
+        "Terengganu": [20, 184, 166, 205],
+        "Kuala Lumpur": [79, 70, 229, 225],
+        "Putrajaya": [132, 204, 22, 225],
+        "Labuan": [249, 115, 22, 225],
+    }
 
-    max_count = max(
-        [state_summary.get(state, {}).get("count", 0) for state in map_states] or [1]
-    ) or 1
+    # Names used by the UPI Admin1 GIS layer. Keeping this mapping separate
+    # means the rest of the app can continue using backend.STATE_OPTIONS
+    # (e.g. "Penang" rather than "Pulau Pinang").
+    GIS_STATE_NAMES = {
+        "Johor": "JOHOR",
+        "Kedah": "KEDAH",
+        "Kelantan": "KELANTAN",
+        "Melaka": "MELAKA",
+        "Negeri Sembilan": "NEGERI SEMBILAN",
+        "Pahang": "PAHANG",
+        "Penang": "PULAU PINANG",
+        "Perak": "PERAK",
+        "Perlis": "PERLIS",
+        "Selangor": "SELANGOR",
+        "Terengganu": "TERENGGANU",
+        "Sabah": "SABAH",
+        "Sarawak": "SARAWAK",
+        "Kuala Lumpur": "WILAYAH PERSEKUTUAN KUALA LUMPUR",
+        "Labuan": "WILAYAH PERSEKUTUAN LABUAN",
+        "Putrajaya": "WILAYAH PERSEKUTUAN PUTRAJAYA",
+    }
+    GIS_TO_APP_STATE = {v: k for k, v in GIS_STATE_NAMES.items()}
 
-    current_state = st.session_state.get("map_selected_state", "Selangor")
-
-    map_rows = []
+    # Every state/federal territory is now a real GeoJSON polygon. This is
+    # deliberately one layer per state so each region keeps its own colour
+    # and the selected state can have a stronger border/fill. This also makes
+    # Sabah, Sarawak, Labuan, Kuala Lumpur and Putrajaya clickable polygons
+    # rather than fallback marker dots.
+    state_layers = []
     for state_name in map_states:
-        summary = state_summary.get(state_name, {"avg_price": 0, "count": 0})
-        heat = summary["avg_price"] / max_avg
-        r, g, b = heat_to_rgb(heat)
+        gis_name = GIS_STATE_NAMES.get(state_name, state_name.upper())
+        where = urllib.parse.quote(f"NAM='{gis_name}'", safe="")
+        state_url = (
+            f"{state_geojson_base}?where={where}&outFields=NAM&"
+            "returnGeometry=true&f=geojson&outSR=4326"
+        )
+        fill = STATE_MAP_COLORS.get(state_name, [148, 163, 184, 205])
         is_selected = state_name == current_state
-        map_rows.append(
-            {
-                "state": state_name,
-                "lat": STATE_COORDS[state_name]["lat"],
-                "lon": STATE_COORDS[state_name]["lon"],
-                "avg_price": summary["avg_price"],
-                "count": summary["count"],
-                "radius": (12000 + 28000 * (summary["count"] / max_count if max_count else 0))
-                * (1.6 if is_selected else 1.0),
-                "r": r, "g": g, "b": b,
-                "line_r": 255,
-                "line_g": 210 if is_selected else 255,
-                "line_b": 0 if is_selected else 255,
-                "line_width": 5 if is_selected else 2,
-                "label": (
-                    f"{state_name}\nAvg price: RM {summary['avg_price']:,.0f}\nListings: {summary['count']:,}"
-                    if is_selected else ""
-                ),
-            }
+        if is_selected:
+            fill = [
+                min(255, fill[0] + 20),
+                min(255, fill[1] + 20),
+                min(255, fill[2] + 20),
+                245,
+            ]
+
+        state_layers.append(
+            pdk.Layer(
+                "GeoJsonLayer",
+                id=f"state-{state_name.lower().replace(' ', '-')}",
+                data=state_url,
+                pickable=True,
+                stroked=True,
+                filled=True,
+                get_fill_color=fill,
+                get_line_color=[45, 34, 89, 255] if is_selected else [255, 255, 255, 245],
+                get_line_width=2.5 if is_selected else 1.2,
+                line_width_min_pixels=2 if is_selected else 1,
+                auto_highlight=True,
+                highlight_color=[255, 255, 255, 85],
+            )
         )
 
-    map_df = pd.DataFrame(map_rows)
-    label_df = map_df[map_df["state"] == current_state]
-
-    map_col, picker_col = st.columns([2, 1])
-
+    label_rows = [
+        {
+            "state": state_name,
+            "lat": STATE_COORDS[state_name]["lat"],
+            "lon": STATE_COORDS[state_name]["lon"],
+            "label": state_name,
+        }
+        for state_name in map_states
+    ]
+    label_df = pd.DataFrame(label_rows)
+    selected_label_df = label_df[label_df["state"] == current_state]
+ 
+    map_col, picker_col = st.columns([2.15, 1])
+ 
     with map_col:
-        layer = pdk.Layer(
-            "ScatterplotLayer",
-            id="state-layer",
-            data=map_df,
-            get_position="[lon, lat]",
-            get_fill_color="[r, g, b, 210]",
-            get_line_color="[line_r, line_g, line_b, 255]",
-            get_line_width="line_width",
-            line_width_units="pixels",
-            line_width_min_pixels=2,
-            stroked=True,
-            get_radius="radius",
-            pickable=True,
-            auto_highlight=True,
-        )
-
         label_layer = pdk.Layer(
             "TextLayer",
             id="state-label-layer",
             data=label_df,
             get_position="[lon, lat]",
             get_text="label",
-            get_size=15,
-            get_color=[40, 34, 70, 255],
-            get_pixel_offset="[0, -24]",
-            get_alignment_baseline="'bottom'",
+            get_size=11,
+            get_color=[51, 65, 85, 235],
+            get_pixel_offset="[0, 0]",
+            get_text_anchor="middle",
+            get_alignment_baseline="center",
         )
-
-        view_state = pdk.ViewState(
-            latitude=4.0, longitude=109.5, zoom=5.0, pitch=0, min_zoom=4, max_zoom=8,
+        selected_label_layer = pdk.Layer(
+            "TextLayer",
+            id="selected-state-label-layer",
+            data=selected_label_df,
+            get_position="[lon, lat]",
+            get_text="label",
+            get_size=16,
+            get_color=[255, 255, 255, 255],
+            get_pixel_offset="[0, 0]",
+            get_text_anchor="middle",
+            get_alignment_baseline="center",
         )
-
-        frozen_view = pdk.View(type="MapView", controller=False)
-
+ 
         deck = pdk.Deck(
-            layers=[layer, label_layer],
-            initial_view_state=view_state,
-            views=[frozen_view],
+            layers=state_layers + [label_layer, selected_label_layer],
+            initial_view_state=pdk.ViewState(
+                latitude=4.0, longitude=109.5, zoom=4.9, pitch=0,
+                min_zoom=4, max_zoom=8,
+            ),
+            views=[pdk.View(type="MapView", controller=False)],
             map_style="light",
             map_provider="carto",
             tooltip={
-                "text": (
-                    "{state}\n"
-                    "Avg price: RM {avg_price}\n"
-                    "Listings: {count}"
-                ),
+                # The UPI Admin1 GeoJSON exposes the state name as NAM.
+                "html": "<b>{NAM}</b><br/>Click to view its market details.",
+                "style": {
+                    "backgroundColor": "rgba(36,48,74,.94)",
+                    "color": "white",
+                    "fontSize": "12px",
+                },
             },
         )
-
-        selection = st.pydeck_chart(
-            deck, height=320, on_select="rerun", selection_mode="single-object", key="state_map",
+ 
+        # Streamlit receives the clicked GeoJSON feature and reruns this tab.
+        map_event = st.pydeck_chart(
+            deck,
+            height=360,
+            key="state_boundary_map",
+            on_select="rerun",
+            selection_mode="single-object",
         )
+ 
+        # Treat a map click exactly like a dropdown selection.
+        # Pydeck can expose the selected feature in slightly different shapes
+        # depending on the Streamlit/Pydeck version, so handle both the
+        # selection.objects payload and the selected layer id.  The layer id
+        # is especially reliable because every state polygon has its own id.
+        try:
+            clicked_state = None
+            selection = getattr(map_event, "selection", None)
 
-        clicked_state = None
-        if selection and selection.selection:
-            objects = selection.selection.get("objects", {})
-            picked = objects.get("state-layer") or next(iter(objects.values()), None)
-            if picked:
-                row = picked[0] if isinstance(picked, list) else picked
-                clicked_state = row.get("state")
+            # Preferred path: read the actual GeoJSON feature properties.
+            selected_objects = getattr(selection, "objects", {}) if selection else {}
+            if isinstance(selected_objects, dict):
+                for layer_id, objects in selected_objects.items():
+                    if not objects:
+                        continue
+                    obj = objects[0] if isinstance(objects, list) else objects
+                    if isinstance(obj, dict):
+                        clicked_value = (
+                            obj.get("NAM")
+                            or obj.get("STATE")
+                            or obj.get("state")
+                        )
+                        if clicked_value:
+                            clicked_state = GIS_TO_APP_STATE.get(
+                                str(clicked_value).strip().upper(), clicked_value
+                            )
+                            break
 
-        if clicked_state and clicked_state != st.session_state.get("map_selected_state"):
-            st.session_state["map_selected_state"] = clicked_state
-            st.session_state["state_dropdown"] = clicked_state
-            st.rerun()
+                    # Fallback: state-{state-name} layer id.
+                    if str(layer_id).startswith("state-"):
+                        raw_name = str(layer_id)[len("state-"):].replace("-", " ")
+                        clicked_state = next(
+                            (s for s in STATE_OPTIONS if s.lower() == raw_name.lower()),
+                            None,
+                        )
+                        if clicked_state:
+                            break
 
+            # If the version only gives us the selected layer/index, recover
+            # the state from the layer id or selection index.
+            if clicked_state not in STATE_OPTIONS:
+                indices = getattr(selection, "indices", {}) if selection else {}
+                if isinstance(indices, dict):
+                    for layer_id, idxs in indices.items():
+                        if idxs and str(layer_id).startswith("state-"):
+                            raw_name = str(layer_id)[len("state-"):].replace("-", " ")
+                            clicked_state = next(
+                                (s for s in STATE_OPTIONS if s.lower() == raw_name.lower()),
+                                None,
+                            )
+                            if clicked_state:
+                                break
+
+            # IMPORTANT: update both keys before rerunning.  These are the same
+            # keys used by the dropdown, so the dropdown, map highlight and all
+            # state-specific details are driven by one source of truth.
+            if clicked_state in STATE_OPTIONS and clicked_state != current_state:
+                st.session_state["state_dropdown"] = clicked_state
+                st.session_state["map_selected_state"] = clicked_state
+                st.rerun()
+        except Exception:
+            # If selection events are unavailable, the dropdown still works.
+            pass
+ 
     with picker_col:
-        st.markdown("##### Select a market")
-        state = visual_picker("State", STATE_OPTIONS, "state_dropdown", current_state)
-
+        st.markdown("##### Select a state")
+        state = st.selectbox(
+            "State",
+            STATE_OPTIONS,
+            key="state_dropdown",
+            label_visibility="collapsed",
+        )
+ 
         if state != st.session_state.get("map_selected_state"):
             st.session_state["map_selected_state"] = state
-
-        if state in state_summary:
-            st.metric("Average price", money(state_summary[state]["avg_price"]))
-            st.caption(f"{state_summary[state]['count']:,} sample listings")
-
+            st.rerun()
+ 
+        summary = state_summary.get(state, {})
+        state_df = ART.sample_df[ART.sample_df["State"] == state].copy()
+        prices = pd.to_numeric(state_df.get("price"), errors="coerce").dropna()
+ 
+        avg_price = float(prices.mean()) if len(prices) else float(summary.get("avg_price", 0))
+        median_price = float(prices.median()) if len(prices) else 0
+        listing_count = int(len(state_df)) if len(state_df) else int(summary.get("count", 0))
+        min_price = float(prices.min()) if len(prices) else 0
+        max_price = float(prices.max()) if len(prices) else 0
+ 
+        state_color = STATE_MAP_COLORS.get(state, [109, 74, 255, 205])
+        state_hex = "#%02x%02x%02x" % tuple(state_color[:3])
+ 
+        st.markdown(
+            f"""
+            <div style="background:linear-gradient(135deg,{state_hex}22,#fff);"
+                 border:1px solid {state_hex}55;border-radius:16px;
+                 padding:15px 16px;margin:8px 0 12px;">
+              <div style="font-size:20px;font-weight:850;color:#2f2457;">📍 {state}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:3px;">Selected market region</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+ 
+        # Stacked (not 2x2) so full "RM 1,234,567.00"-style values always
+        # have the full column width and never get clipped.
+        st.metric("Average price", money(avg_price))
+        st.metric("Median price", money(median_price) if median_price else "—")
+        st.metric("Listings", f"{listing_count:,}")
+        st.metric("Price / sq.ft.", money(
+            (prices / pd.to_numeric(state_df.loc[prices.index, "Property Size"], errors="coerce")).replace([np.inf, -np.inf], np.nan).mean()
+            if len(prices) and "Property Size" in state_df.columns else 0
+        ))
+ 
+        if min_price and max_price:
+            st.caption(f"Observed price range: {money(min_price)} – {money(max_price)}")
+ 
+        city_count = int(state_df["City"].nunique()) if "City" in state_df.columns else 0
+        property_count = int(state_df["Property Type"].nunique()) if "Property Type" in state_df.columns else 0
+        st.caption(f"🏙️ {city_count} cities represented · 🏢 {property_count} property types")
+ 
     if ART.city_options:
         state_city_map = (
             ART.sample_df.dropna(subset=["State", "City"])
@@ -1420,54 +1978,86 @@ with tab_predict:
         cities_for_state = [c for c in state_city_map.get(state, []) if c in ART.city_options]
         if not cities_for_state:
             cities_for_state = [state]
-
+ 
         city_options = ["Not sure / Other"] + cities_for_state
-        if st.session_state.get("city_dropdown", "Not sure / Other") not in city_options:
-            st.session_state["city_dropdown"] = "Not sure / Other"
-
+        if st.session_state.get("city_dropdown", DEFAULT_PREDICTOR["city"]) not in city_options:
+            st.session_state["city_dropdown"] = DEFAULT_PREDICTOR["city"]
+ 
         city_choice = st.selectbox(
             "City", city_options, key="city_dropdown",
         )
         city = None if city_choice == "Not sure / Other" else city_choice
     else:
         city = None
-
+ 
     # -------------------------------------------------------------
     # Facilities + nearby amenities
     # -------------------------------------------------------------
     st.divider()
     st.markdown("#### 🏊 Facilities & Nearby Amenities")
+    st.caption(
+        "Select all features and nearby amenities that apply. "
+        "Quick-fill presets and listing autofill automatically update both groups, "
+        "and your final selections are used directly by the prediction model."
+    )
 
-    fac_col, nearby_col = st.columns(2)
+    def _amenity_label(value):
+        """Make model feature names human-readable without changing their values."""
+        return str(value).replace("_", " ").strip()
+
+    # The session-state values are the single source of truth. Autofill updates
+    # these keys before the widgets render, so the selected pills follow the listing.
+    saved_facilities = _normalise_option_values(
+        st.session_state.get("pp_facilities", []), FACILITY_OPTIONS
+    )
+    saved_nearby = _normalise_option_values(
+        st.session_state.get("pp_nearby", []), NEARBY_OPTIONS
+    )
+    st.session_state["pp_facilities"] = saved_facilities
+    st.session_state["pp_nearby"] = saved_nearby
+
+    fac_col, nearby_col = st.columns(2, gap="large")
 
     with fac_col:
+        st.markdown("**🏢 Property Facilities**")
         facilities = st.pills(
-            "Facilities", FACILITY_OPTIONS,
-            default=st.session_state.get("pp_facilities", []),
-            selection_mode="multi", key="pp_facilities",
+            "Choose available facilities",
+            FACILITY_OPTIONS,
+            selection_mode="multi",
+            key="pp_facilities",
+            format_func=_amenity_label,
+            label_visibility="collapsed",
         ) or []
+        st.caption(f"{len(facilities)} selected" if facilities else "No facilities selected")
 
     with nearby_col:
+        st.markdown("**📍 Nearby Amenities**")
         nearby = st.pills(
-            "Nearby amenities", NEARBY_OPTIONS,
-            default=st.session_state.get("pp_nearby", []),
-            selection_mode="multi", key="pp_nearby",
-            format_func=lambda x: x.replace("_", " "),
+            "Choose nearby amenities",
+            NEARBY_OPTIONS,
+            selection_mode="multi",
+            key="pp_nearby",
+            format_func=_amenity_label,
+            label_visibility="collapsed",
         ) or []
+        st.caption(f"{len(nearby)} selected" if nearby else "No nearby amenities selected")
 
     # -------------------------------------------------------------
     # Predict / reset
     # -------------------------------------------------------------
     st.divider()
     pred_col, reset_col = st.columns(2)
-
+ 
     with pred_col:
         predict_clicked = st.button("🔍 Predict Price", type="primary", use_container_width=True)
-
+ 
     with reset_col:
         reset_clicked = st.button("↺ Reset", use_container_width=True)
-
+ 
     if reset_clicked:
+        # Remove the current widget state.  On the following rerun every
+        # predictor widget is recreated from DEFAULT_PREDICTOR, giving Reset
+        # one consistent, standardised destination every time.
         keys_to_clear = [
             "autofill_price", "map_selected_state", "state_dropdown",
             "city_dropdown", "state_map", "predict_ptype_idx",
@@ -1475,7 +2065,7 @@ with tab_predict:
         for key in keys_to_clear:
             st.session_state.pop(key, None)
         st.rerun()
-
+ 
     if predict_clicked:
         payload = {
             "bedroom": bedroom,
@@ -1494,30 +2084,30 @@ with tab_predict:
             "facilities": facilities,
             "nearby": nearby,
         }
-
+ 
         spinner_messages = [
             "Crunching the numbers…",
             "Comparing property characteristics…",
             "Checking location effects…",
             "Consulting the tuned model…",
         ]
-
+ 
         with st.spinner(random.choice(spinner_messages)):
             time.sleep(0.25)
             result = predict(payload)
-
+ 
         render_price_reveal(
             result["prediction"], result.get("price_per_sqft"), result.get("bracket"),
         )
-
+ 
         st.success(f"Prediction generated using the tuned {best_name} model.")
-
+ 
         metric_row([
             ("Predicted Price", money(result["prediction"]), None, "#22C55E"),
             ("Test RMSE", money(result["best_rmse"]), None, "#3B82F6"),
             ("Price / sq.ft.", money(result["price_per_sqft"]), None, "#F59E0B"),
         ])
-
+ 
         if result["range_low"] is not None:
             st.info(
                 "Indicative error band based on the best model's held-out "
@@ -1525,7 +2115,7 @@ with tab_predict:
                 f"{money(result['range_high'])}. "
                 "This is not a formal confidence interval."
             )
-
+ 
         if result["similar_avg"] is not None:
             direction = "above" if result["diff_pct"] >= 0 else "below"
             st.caption(
@@ -1535,7 +2125,7 @@ with tab_predict:
                 f"The prediction is "
                 f"{abs(result['diff_pct']):.1f}% {direction} that average."
             )
-
+ 
         if result.get("feature_importances"):
             importance_df = (
                 pd.DataFrame(result["feature_importances"])
@@ -1548,22 +2138,22 @@ with tab_predict:
                     "They should not be interpreted as causal effects."
                 )
                 st.bar_chart(importance_df, height=300)
-
+ 
         if autofill_price is not None:
             st.caption(f"Actual price of the autofilled listing: {money(autofill_price)}")
-
+ 
         st.caption(
             "This prediction is an indicative estimate for educational "
             "and analytical purposes and should not be used as the sole "
             "basis for a property or financial decision."
         )
-
-
+ 
+ 
 # ---------------------------------------------------------------------
 # Footer
 # ---------------------------------------------------------------------
 st.divider()
-
+ 
 st.caption(
     f"BMDS2003 · Four-model regression comparison · "
     f"Baseline: {baseline_name} · "
