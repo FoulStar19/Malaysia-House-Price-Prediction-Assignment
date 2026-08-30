@@ -232,6 +232,8 @@ except Exception as exc:
     st.stop()
  
 get_listings = backend.get_listings
+get_filter_options = backend.get_filter_options
+get_listing_options = backend.get_listing_options
 get_listing = backend.get_listing
 get_state_summary = backend.get_state_summary
 get_model_comparison = backend.get_model_comparison
@@ -537,18 +539,18 @@ with tab_overview:
  
     st.markdown("##### 📋 Cleaned Listings Sample")
  
-    all_listings = get_listings()
+    filter_options = backend.get_filter_options()
  
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         state_filter = st.multiselect(
             "Filter by State",
-            all_listings["available_states"],
+            filter_options["available_states"],
         )
     with col_f2:
         type_filter = st.multiselect(
             "Filter by Property Type",
-            all_listings["available_property_types"],
+            filter_options["available_property_types"],
         )
  
     result = get_listings(
@@ -1277,7 +1279,7 @@ with tab_predict:
     # Optional autofill from a real listing (collapsed to stay compact)
     # -------------------------------------------------------------
     with st.expander("📋 Or autofill from an existing listing", expanded=False):
-        listing_pool = get_listings()["listings"]
+        listing_pool = get_listing_options()
  
         if listing_pool:
             col_a1, col_a2 = st.columns([4, 1])

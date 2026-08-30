@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 import re
 import warnings
+import joblib
 
 import numpy as np
 import pandas as pd
@@ -34,6 +35,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "houses.csv"
+ARTIFACT_FILE = BASE_DIR / "model_artifacts.joblib"
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
@@ -457,225 +459,33 @@ def _get_transformed_feature_names(preprocessor):
 
 @lru_cache(maxsize=1)
 def load_artifacts():
-    df, sample_df, X, y, data_quality = _prepare_data()
+    """Load pre-trained artifacts instead of training models on Streamlit startup.
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=TEST_SIZE,
-        random_state=RANDOM_STATE,
-    )
-
-    selected_models = _model_searches(_build_preprocessor())
-
-    models = {}
-    results = []
-    tuning_rows = []
-    predictions = {}
-
-    for name, estimator in selected_models.items():
-        model = Pipeline([
-            ("preprocessor", _build_preprocessor()),
-            ("model", estimator),
-        ])
-        model.fit(X_train, y_train)
-        models[name] = model
-
-        pred = model.predict(X_test)
-        predictions[name] = np.asarray(pred)
-        rmse = float(np.sqrt(mean_squared_error(y_test, pred)))
-        mae = float(mean_absolute_error(y_test, pred))
-        r2 = float(r2_score(y_test, pred))
-
-        results.append({
-            "Model": name,
-            "Role": "Baseline" if name == "Decision Tree" else "Candidate",
-            "Test RMSE": rmse,
-            "RMSE": rmse,
-            "MAE": mae,
-            "R2": r2,
-        })
-        tuning_rows.append({
-            "Model": name,
-            "Best Parameters": str(estimator.get_params()),
-            "Best Test RMSE": rmse,
-        })
-
-    results_df = pd.DataFrame(results).sort_values("Test RMSE").reset_index(drop=True)
-
-    tuning_df = pd.DataFrame(tuning_rows)
-
-    # Select the deployment model using cross-validation only. The held-out
-    # test set remains an unbiased final evaluation set.
-    best_name = str(results_df.iloc[0]["Model"])
-    best_model = models[best_name]
-
-    # Use the best model's fitted preprocessor for feature names.
-    preprocessor = best_model.named_steps["preprocessor"]
-    transformed_feature_names = _get_transformed_feature_names(preprocessor)
-
-    # A scaler object is retained for backwards compatibility with the old app.
-    scaler = (
-        preprocessor.named_transformers_["numeric"]
-        .named_steps["scaler"]
-        if "numeric" in preprocessor.named_transformers_
-        else None
-    )
-
-    edges, labels = _make_brackets(y)
-
-    actual_bracket = pd.Series(
-        pd.cut(
-            y_test,
-            bins=edges,
-            labels=False,
-            include_lowest=True,
-        ),
-        index=y_test.index,
-    )
-
-    bracket_results = []
-    best_cm = None
-    best_metrics = {}
-
-    for name, pred in predictions.items():
-        pred_bracket = pd.Series(
-            pd.cut(
-                pred,
-                bins=edges,
-                labels=False,
-                include_lowest=True,
-            ),
-            index=y_test.index,
+    Training is intentionally kept off the Streamlit Cloud request path. The
+    checked-in model_artifacts.joblib contains the fitted deployment model and
+    all metrics/diagnostics needed by the UI.
+    """
+    if not ARTIFACT_FILE.exists():
+        raise FileNotFoundError(
+            "Pre-trained model artifacts are missing. Add model_artifacts.joblib "
+            "beside app.py/backend.py before deploying."
         )
 
-        valid = actual_bracket.notna() & pred_bracket.notna()
-
-        actual_b = actual_bracket.loc[valid].astype(int)
-        pred_b = pred_bracket.loc[valid].astype(int)
-
-        metrics = {
-            "Model": name,
-            "Accuracy": float(accuracy_score(actual_b, pred_b)),
-            "Precision": float(
-                precision_score(actual_b, pred_b, average="macro", zero_division=0)
-            ),
-            "Recall": float(
-                recall_score(actual_b, pred_b, average="macro", zero_division=0)
-            ),
-            "F1": float(
-                f1_score(actual_b, pred_b, average="macro", zero_division=0)
-            ),
-        }
-        bracket_results.append(metrics)
-
-        if name == best_name:
-            best_cm = confusion_matrix(
-                actual_b,
-                pred_b,
-                labels=list(range(len(labels))),
-            )
-            best_metrics = metrics
-
-    # Feature importance for tree-based winners.
-    feature_importances = []
-    final_estimator = best_model.named_steps["model"]
-
-    if hasattr(final_estimator, "feature_importances_") and transformed_feature_names:
-        values = np.asarray(final_estimator.feature_importances_)
-        pairs = sorted(
-            zip(transformed_feature_names, values),
-            key=lambda x: x[1],
-            reverse=True,
-        )[:12]
-        feature_importances = [
-            {"feature": str(name), "importance": float(value)}
-            for name, value in pairs
-        ]
-
-    # Permutation importance is useful for non-tree winners, but only for a
-    # small sample to keep Streamlit startup responsive.
-    elif len(X_test) > 0 and transformed_feature_names:
-        sample_n = min(500, len(X_test))
-        X_perm = X_test.iloc[:sample_n]
-        y_perm = y_test.iloc[:sample_n]
-        try:
-            perm = permutation_importance(
-                best_model,
-                X_perm,
-                y_perm,
-                scoring="neg_root_mean_squared_error",
-                n_repeats=3,
-                random_state=RANDOM_STATE,
-                n_jobs=-1,
-            )
-            pairs = sorted(
-                zip(X.columns, perm.importances_mean),
-                key=lambda x: x[1],
-                reverse=True,
-            )[:12]
-            feature_importances = [
-                {"feature": str(name), "importance": float(value)}
-                for name, value in pairs
-            ]
-        except Exception:
-            feature_importances = []
-
-    numeric_limits = {}
-    for col in NUMERIC_FEATURES:
-        s = df[col].dropna()
-        if len(s):
-            numeric_limits[col] = {
-                "min": float(s.min()),
-                "max": float(s.max()),
-                "median": float(s.median()),
-            }
-
-    extra = {
-        "best_model_name": best_name,
-        "baseline_model_name": "Decision Tree",
-        "y_test": y_test.to_numpy(),
-        "test_predictions": predictions,
-        "price_bin_edges": edges,
-        "price_bin_labels": labels,
-        "bracket_confusion_matrix": best_cm,
-        "bracket_accuracy": best_metrics.get("Accuracy", 0.0),
-        "bracket_precision": best_metrics.get("Precision", 0.0),
-        "bracket_recall": best_metrics.get("Recall", 0.0),
-        "bracket_f1": best_metrics.get("F1", 0.0),
-        "bracket_results_all_models": pd.DataFrame(bracket_results),
-        "feature_importances": feature_importances,
-        "train_rows": len(X_train),
-        "test_rows": len(X_test),
-        "test_size": TEST_SIZE,
-        "cv_folds": 0,
-        "model_configs": tuning_df,
-        "selection_metric": "Test RMSE",
-        "data_cleaning": data_quality.get("cleaning_notes", []),
-    }
-
-    city_options = sorted(
-        {
-            c[len("City_"):]
-            for c in transformed_feature_names
-            if c.startswith("City_")
-        }
-    )
-
+    payload = joblib.load(ARTIFACT_FILE)
     return Artifacts(
-        model=best_model,
-        models=models,
-        scaler=scaler,
-        preprocessor=preprocessor,
-        feature_columns=list(X.columns),
-        transformed_feature_names=transformed_feature_names,
-        results_df=results_df,
-        tuning_df=tuning_df,
-        extra=extra,
-        sample_df=sample_df.reset_index(drop=True),
-        city_options=city_options,
-        numeric_limits=numeric_limits,
-        data_quality=data_quality,
+        model=payload["model"],
+        models=payload.get("models", {}),
+        scaler=payload.get("scaler"),
+        preprocessor=payload["preprocessor"],
+        feature_columns=list(payload["feature_columns"]),
+        transformed_feature_names=list(payload["transformed_feature_names"]),
+        results_df=payload["results_df"],
+        tuning_df=payload["tuning_df"],
+        extra=payload["extra"],
+        sample_df=payload["sample_df"],
+        city_options=list(payload["city_options"]),
+        numeric_limits=payload["numeric_limits"],
+        data_quality=payload["data_quality"],
     )
 
 
@@ -819,6 +629,26 @@ def get_listings(states=None, property_types=None):
             art.sample_df["Property Type"].dropna().unique()
         ),
     }
+
+
+def get_filter_options():
+    """Return lightweight filter choices without serializing listing rows."""
+    art = load_artifacts()
+    return {
+        "available_states": sorted(art.sample_df["State"].dropna().unique()),
+        "available_property_types": sorted(
+            art.sample_df["Property Type"].dropna().unique()
+        ),
+    }
+
+
+def get_listing_options():
+    """Return only the lightweight fields needed by the predictor selectbox."""
+    art = load_artifacts()
+    cols = ["State", "Property Type", "Property Size"]
+    records = art.sample_df[cols].copy()
+    records.insert(0, "index", records.index)
+    return records.where(pd.notna(records), None).to_dict("records")
 
 
 def get_listing(index):
