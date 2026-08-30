@@ -1649,6 +1649,12 @@ with tab_predict:
     def visual_picker(label, options, key, default, format_func=None):
         """Chip-based input for a fast, visual alternative to sliders/selects."""
         current = st.session_state.get(key, default)
+
+        # Streamlit session state can contain strings after autofill/query-param
+        # updates. Normalize numeric picker values before st.pills formats them.
+        if isinstance(default, (int, float)):
+            current = safe_int(current, default)
+
         values = list(options)
         if current not in values:
             values.append(current)
@@ -1664,7 +1670,7 @@ with tab_predict:
     with profile_1:
         floors = safe_int(visual_picker("🏗️ Building floors", [3, 5, 10, 15, 20, 30, 45, 60], "pp_floors", DEFAULT_PREDICTOR["floors"]), 20)
         size = safe_int(visual_picker("📐 Property size", [480, 650, 750, 900, 1200, 1400, 1800, 2500, 3200], "pp_size", DEFAULT_PREDICTOR["size"],
-                                       lambda value: f"{value:,} sq.ft."), 900)
+                                       lambda value: f"{safe_int(value, 900):,} sq.ft."), 900)
         total_units = safe_int(visual_picker("🏘️ Total units", [50, 100, 200, 300, 450, 600, 800, 1200], "pp_total_units", DEFAULT_PREDICTOR["total_units"]), 500)
     with profile_2:
         completion_year = safe_int(visual_picker("🗓️ Completion year", [2000, 2005, 2010, 2012, 2015, 2016, 2020, 2022, 2025], "pp_completion_year", DEFAULT_PREDICTOR["completion_year"]), 2015)
