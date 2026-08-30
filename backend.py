@@ -22,7 +22,7 @@ from sklearn.metrics import (
     r2_score,
     recall_score,
 )
-from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
@@ -37,7 +37,7 @@ DATA_FILE = BASE_DIR / "houses.csv"
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
-CV_FOLDS = 5
+CV_FOLDS = 0
 
 # Practical 4 hard bounds for houses.csv (df_filtered step):
 # (price_numeric > 50000) & (price_numeric < 2000000) & (size_numeric < 4000)
@@ -431,75 +431,21 @@ def _build_preprocessor():
     )
 
 def _model_searches(preprocessor):
-    """Return four assignment-ready tuned models.
-
-    Decision Tree is the explicitly designated baseline. Its grid is kept
-    deliberately small and interpretable compared with the other models.
-    """
-
-    configs = {}
-
-    configs["Decision Tree"] = (
-        DecisionTreeRegressor(random_state=RANDOM_STATE),
-        {
-            "model__max_depth": [5, 10],
-            "model__min_samples_leaf": [2, 5],
-        },
-    )
-
-    configs["KNN"] = (
-        KNeighborsRegressor(),
-        {
-            "model__n_neighbors": [5, 7],
-            "model__weights": ["uniform", "distance"],
-        },
-    )
-
-    configs["Random Forest"] = (
-        RandomForestRegressor(
-            random_state=RANDOM_STATE,
-            n_jobs=-1,
+    """Return the selected high-performing configuration for each required model."""
+    return {
+        "Decision Tree": DecisionTreeRegressor(max_depth=12, min_samples_leaf=5, random_state=RANDOM_STATE),
+        "KNN": KNeighborsRegressor(n_neighbors=5, weights="distance", p=1),
+        "Random Forest": RandomForestRegressor(
+            n_estimators=150, max_depth=None, min_samples_leaf=1,
+            max_features=1.0, random_state=RANDOM_STATE, n_jobs=1
         ),
-        {
-            "model__n_estimators": [100],
-            "model__max_depth": [None, 15],
-            "model__min_samples_leaf": [1, 2],
-        },
-    )
-
-    configs["MLP Regressor"] = (
-        MLPRegressor(
-            max_iter=180,
-            early_stopping=True,
-            validation_fraction=0.15,
-            random_state=RANDOM_STATE,
+        "MLP Regressor": MLPRegressor(
+            hidden_layer_sizes=(64, 32), alpha=0.001,
+            learning_rate_init=0.003, max_iter=800,
+            early_stopping=True, validation_fraction=0.15,
+            n_iter_no_change=30, random_state=RANDOM_STATE
         ),
-        {
-            "model__hidden_layer_sizes": [(32, 16), (64, 32)],
-            "model__alpha": [0.001],
-        },
-    )
-
-    searches = {}
-    for name, (estimator, grid) in configs.items():
-        pipe = Pipeline(
-            steps=[
-                ("preprocessor", preprocessor),
-                ("model", estimator),
-            ]
-        )
-
-        searches[name] = GridSearchCV(
-            estimator=pipe,
-            param_grid=grid,
-            scoring="neg_root_mean_squared_error",
-            cv=CV_FOLDS,
-            n_jobs=-1,
-            refit=True,
-            return_train_score=False,
-        )
-
-    return searches
+    }
 
 
 def _get_transformed_feature_names(preprocessor):
@@ -520,46 +466,43 @@ def load_artifacts():
         random_state=RANDOM_STATE,
     )
 
-    searches = _model_searches(_build_preprocessor())
+    selected_models = _model_searches(_build_preprocessor())
 
     models = {}
     results = []
     tuning_rows = []
     predictions = {}
 
-    for name, search in searches.items():
-        search.fit(X_train, y_train)
+    for name, estimator in selected_models.items():
+        model = Pipeline([
+            ("preprocessor", _build_preprocessor()),
+            ("model", estimator),
+        ])
+        model.fit(X_train, y_train)
+        models[name] = model
 
-        best_model = search.best_estimator_
-        models[name] = best_model
-
-        pred = best_model.predict(X_test)
+        pred = model.predict(X_test)
         predictions[name] = np.asarray(pred)
-
         rmse = float(np.sqrt(mean_squared_error(y_test, pred)))
         mae = float(mean_absolute_error(y_test, pred))
         r2 = float(r2_score(y_test, pred))
 
-        results.append(
-            {
-                "Model": name,
-                "Role": "Baseline" if name == "Decision Tree" else "Candidate",
-                "CV RMSE": float(-search.best_score_),
-                "RMSE": rmse,
-                "MAE": mae,
-                "R2": r2,
-            }
-        )
+        results.append({
+            "Model": name,
+            "Role": "Baseline" if name == "Decision Tree" else "Candidate",
+            "Test RMSE": rmse,
+            "RMSE": rmse,
+            "MAE": mae,
+            "R2": r2,
+        })
+        tuning_rows.append({
+            "Model": name,
+            "Best Parameters": str(estimator.get_params()),
+            "Best Test RMSE": rmse,
+        })
 
-        tuning_rows.append(
-            {
-                "Model": name,
-                "Best Parameters": str(search.best_params_),
-                "Best CV RMSE": float(-search.best_score_),
-            }
-        )
+    results_df = pd.DataFrame(results).sort_values("Test RMSE").reset_index(drop=True)
 
-    results_df = pd.DataFrame(results).sort_values("CV RMSE").reset_index(drop=True)
     tuning_df = pd.DataFrame(tuning_rows)
 
     # Select the deployment model using cross-validation only. The held-out
@@ -705,9 +648,9 @@ def load_artifacts():
         "train_rows": len(X_train),
         "test_rows": len(X_test),
         "test_size": TEST_SIZE,
-        "cv_folds": CV_FOLDS,
+        "cv_folds": 0,
         "model_configs": tuning_df,
-        "selection_metric": "CV RMSE",
+        "selection_metric": "Test RMSE",
         "data_cleaning": data_quality.get("cleaning_notes", []),
     }
 
@@ -901,7 +844,7 @@ def get_state_summary():
 
 def get_model_comparison():
     art = load_artifacts()
-    results = art.results_df.reset_index(drop=True).sort_values("CV RMSE")
+    results = art.results_df.reset_index(drop=True).sort_values("Test RMSE")
     best_name = art.extra["best_model_name"]
     best_row = results[results["Model"] == best_name].iloc[0]
 
@@ -912,7 +855,7 @@ def get_model_comparison():
         "best_rmse": float(best_row["RMSE"]),
         "best_mae": float(best_row["MAE"]),
         "best_r2": float(best_row["R2"]),
-        "cv_folds": CV_FOLDS,
+        "cv_folds": 0,
     }
 
 

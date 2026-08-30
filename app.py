@@ -439,7 +439,7 @@ with tab_overview:
                     f"{quality['removed_invalid_size']:,} invalid sizes")},
     ])
     with st.expander("🧹 Cleaning audit trail", expanded=True):
-        st.dataframe(flow, width="stretch", hide_index=True)
+        st.dataframe(flow, use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -473,7 +473,7 @@ with tab_overview:
         )
         st.dataframe(
             display_df,
-            width="stretch",
+            use_container_width=True,
             height=300,
         )
     else:
@@ -500,7 +500,7 @@ with tab_overview:
             fig.update_layout(**PLOTLY_LAYOUT, height=340, showlegend=False)
             fig.update_xaxes(title="Average price (RM)")
             fig.update_yaxes(title=None)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for the selected filters.")
 
@@ -512,7 +512,7 @@ with tab_overview:
             fig.update_layout(**PLOTLY_LAYOUT, height=340, showlegend=False)
             fig.update_yaxes(title="Listings")
             fig.update_xaxes(title="Property price (RM)")
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No data for the selected filters.")
 
@@ -526,7 +526,7 @@ with tab_overview:
         fig.update_layout(**PLOTLY_LAYOUT, height=420,
                           xaxis_title="Property size (sq. ft.)",
                           yaxis_title="Property price (RM)")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
@@ -546,7 +546,7 @@ with tab_overview:
                          barmode="group", orientation="h",
                          color_discrete_map={"Missing Values Before": "#F59E0B", "Missing Values After": "#3B82F6"})
             fig.update_layout(**PLOTLY_LAYOUT, height=420, yaxis_title=None)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No missing-value summary available.")
 
@@ -556,14 +556,14 @@ with tab_overview:
         if len(outlier_df):
             st.dataframe(
                 outlier_df.round(2),
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
             )
             st.caption("IQR flags are reviewed, not automatically deleted: unusual high-value properties can be valid listings.")
 
     with st.expander("📍 Address-to-location validation sample"):
         st.caption("Derived State and City are checked against the original address; uncertain values remain explicit rather than guessed.")
-        st.dataframe(pd.DataFrame(quality["location_validation"]), width="stretch", hide_index=True)
+        st.dataframe(pd.DataFrame(quality["location_validation"]), use_container_width=True, hide_index=True)
 
 
 # =====================================================================
@@ -606,7 +606,7 @@ with tab_compare:
         if "R2" in formatted.columns:
             formatted["R2"] = formatted["R2"].map(lambda x: f"{x:.4f}")
 
-        st.dataframe(formatted, width="stretch", hide_index=True)
+        st.dataframe(formatted, use_container_width=True, hide_index=True)
 
     # These are intentionally separate from the regression table.  The
     # continuous predictions are binned into quartile price bands only as an
@@ -622,7 +622,7 @@ with tab_compare:
             bracket_display = bracket_df[["Model", "Accuracy", "Precision", "Recall", "F1"]].copy()
             for metric in ["Accuracy", "Precision", "Recall", "F1"]:
                 bracket_display[metric] = bracket_display[metric].map(lambda value: f"{value:.1%}")
-            st.dataframe(bracket_display, width="stretch", hide_index=True)
+            st.dataframe(bracket_display, use_container_width=True, hide_index=True)
         else:
             st.info("Supplementary bracket metrics are unavailable.")
 
@@ -681,7 +681,7 @@ with tab_compare:
         fig.add_bar(name="MAE", x=model_order, y=mae_vals, marker_color="#EC4899")
         fig.update_layout(**PLOTLY_LAYOUT, height=420, barmode="group",
                            yaxis_title="Error (RM)", title="Regression Error Comparison")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     elif chart_choice == "📈 R² Score":
         st.caption("Higher values indicate better explanatory performance.")
@@ -702,7 +702,7 @@ with tab_compare:
             title="R² Score by Model",
         )
         fig.update_yaxes(title="R²", range=[0, 1])
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     elif chart_choice == "📦 Residual boxplot":
         st.caption(
@@ -715,7 +715,7 @@ with tab_compare:
         fig.add_hline(y=0, line_dash="dash", line_color="rgba(45,34,89,0.45)")
         fig.update_layout(**PLOTLY_LAYOUT, height=460, showlegend=False,
                            yaxis_title="Residual (RM)", title="Residual Error Distribution")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     elif chart_choice == "🌊 Residual distribution":
         st.caption("How prediction errors are distributed for each model.")
@@ -727,7 +727,7 @@ with tab_compare:
         fig.update_layout(**PLOTLY_LAYOUT, height=460, barmode="overlay",
                            xaxis_title="Residual (RM)", yaxis_title="Frequency",
                            title="Residual Distribution")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     elif chart_choice == "🔀 Actual vs Predicted":
         st.caption(
@@ -747,7 +747,7 @@ with tab_compare:
         fig.update_layout(**PLOTLY_LAYOUT, height=480,
                            xaxis_title="Actual Price (RM)", yaxis_title="Predicted Price (RM)",
                            title=f"Actual vs Predicted — {best_name}")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     elif chart_choice == "🧭 Residuals vs Predicted":
         st.caption(
@@ -762,7 +762,7 @@ with tab_compare:
         fig.update_layout(**PLOTLY_LAYOUT, height=480, showlegend=False,
                            xaxis_title="Predicted Price (RM)", yaxis_title="Residual (RM)",
                            title=f"Residuals vs Predicted — {best_name}")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     elif chart_choice == "🔑 Feature importance":
         importance_df = (
@@ -777,14 +777,14 @@ with tab_compare:
         fig.update_layout(**PLOTLY_LAYOUT, height=480, coloraxis_showscale=False,
                            xaxis_title="Importance", yaxis_title=None,
                            title=f"Top 15 Feature Importances — {best_name}")
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
     with st.expander("⚙️ Parameter configuration"):
         tuning_df = pd.DataFrame(get_tuning_results())
         if len(tuning_df):
-            st.dataframe(tuning_df, width="stretch", hide_index=True)
+            st.dataframe(tuning_df, use_container_width=True, hide_index=True)
 
     st.caption(f"Baseline: {baseline_name}. The final model is selected by held-out test RMSE, supported by MAE and R².")
 
@@ -839,23 +839,35 @@ with tab_predict:
         "nearby": "pp_nearby",
     }
 
-    # Values emitted by the animated HTML studio are returned via query
-    # parameters, then applied to Streamlit state on the next rerun.
-    studio_field = st.query_params.get("studio_field")
-    studio_value = st.query_params.get("studio_value")
-    studio_limits = {
-        "bedroom": (0, 20), "bathroom": (0, 20), "parking": (0, 20),
-        "size": (1, 200000),
-    }
-    if studio_field in studio_limits and studio_value is not None:
+    # Read query params using st.query_params
+    studio_field = st.query_params.get("studio_field", None)
+    studio_value = st.query_params.get("studio_value", None)
+
+    if studio_field in FIELD_KEYS and studio_value is not None:
         try:
-            number = int(float(studio_value))
-            low, high = studio_limits[studio_field]
-            st.session_state[FIELD_KEYS[studio_field]] = max(low, min(high, number))
+            val = int(float(studio_value))
+            
+            # 1. Directly overwrite the session state key Streamlit uses for inputs
+            st.session_state[FIELD_KEYS[studio_field]] = val
+            
+            # 2. Sync floorplan editor state if present
+            if studio_field in {"bedroom", "bathroom", "parking"}:
+                st.session_state[f"fp_editor_{studio_field}"] = val
+                
         except (TypeError, ValueError):
             pass
-        st.query_params.pop("studio_field", None)
-        st.query_params.pop("studio_value", None)
+        finally:
+            # Clear params to prevent persistent loops on manual refreshes
+            st.query_params.clear()
+
+        st.number_input("Bedrooms", min_value=0, max_value=20, key="bedroom")
+        st.number_input("Bathrooms", min_value=0, max_value=20, key="bathroom")
+        st.number_input("Parking", min_value=0, max_value=20, key="parking")
+        st.number_input("Size", min_value=1, max_value=200000, key="size")
+
+        # Force an immediate rerun so the applied value shows up right away
+        # instead of waiting for the next unrelated widget interaction.
+        st.rerun()
 
     def apply_field_values(values):
         """Push a full bundle of values into every widget key at once."""
@@ -1026,7 +1038,7 @@ with tab_predict:
             with col_a2:
                 st.write("")
                 st.write("")
-                autofill_clicked = st.button("Set", width="stretch")
+                autofill_clicked = st.button("Set", use_container_width=True)
 
             if autofill_clicked:
                 loaded = get_listing(selected_listing)
@@ -1125,8 +1137,7 @@ with tab_predict:
       </div>
     """
     studio_model = (
-        f'<model-viewer src="{studio_model_url}" alt="3D {property_type}" camera-controls auto-rotate '
-        'rotation-per-second="18deg" shadow-intensity="1" exposure="1.12"></model-viewer>'
+        f'<model-viewer src="{studio_model_url}" alt="3D {property_type}" camera-controls touch-action="pan-y" interaction-prompt="auto" shadow-intensity="1" exposure="1.12"> </model-viewer>'
         if studio_model_url else
         studio_fallback_building
     )
@@ -1162,10 +1173,26 @@ with tab_predict:
       }}
       function closeEditor() {{ active = null; document.getElementById('studioShell').classList.remove('editing'); }}
       function backdropClose(event) {{ if (event.target.id === 'studioShell') closeEditor(); }}
-      function saveEditor() {{
-        if (!active) return; const input = document.getElementById('drawerInput');
-        const url = new URL(window.parent.location.href); url.searchParams.set('studio_field', active); url.searchParams.set('studio_value', input.value); window.parent.location.href = url.toString();
-      }}
+        function saveEditor() {{
+            if (!active) return;
+            const input = document.getElementById('drawerInput');
+            const val = parseInt(input.value, 10);
+            const cleanVal = isNaN(val) ? input.value : String(val);
+            
+            // Construct new URL with parameters
+            const parentUrl = new URL(window.parent.location.href);
+            parentUrl.searchParams.set('studio_field', active);
+            parentUrl.searchParams.set('studio_value', cleanVal);
+            
+            // This iframe is sandboxed by Streamlit without "allow-top-navigation",
+            // so directly assigning window.parent.location.href is silently
+            // blocked by the browser. "allow-same-origin" is granted though, so
+            // we inject a tiny script into the parent document instead — running
+            // there (outside the sandbox) it's free to navigate normally.
+            const bridge = window.parent.document.createElement('script');
+            bridge.textContent = 'window.location.href = ' + JSON.stringify(parentUrl.toString()) + ';';
+            window.parent.document.body.appendChild(bridge);
+        }}
     </script>
     <style>
       * {{ box-sizing:border-box; }} body {{ margin:0; background:transparent; color:#283551; font-family:Inter,Arial,sans-serif; }}
@@ -1174,7 +1201,7 @@ with tab_predict:
       .studio-stage {{ position:absolute; inset:0 0 0 28%; transition:transform .62s cubic-bezier(.2,.9,.2,1); }} .editing .studio-stage {{ transform:translateX(19%); }}
       .studio-model {{ width:245px; height:280px; position:absolute; left:50%; top:58px; transform:translateX(-50%); z-index:2; display:flex; align-items:flex-end; justify-content:center; perspective:950px; }} model-viewer {{ width:100%; height:100%; --poster-color:transparent; }}
       .orbit {{ position:absolute; border:1px dashed rgba(109,74,255,.25); border-radius:50%; left:50%; top:55%; transform:translate(-50%,-50%); }} .orbit-one {{ width:340px; height:130px; }} .orbit-two {{ width:270px; height:100px; transform:translate(-50%,-50%) rotate(-19deg); }}
-      .studio-cards {{ position:absolute; inset:0; z-index:4; }} .studio-card {{ position:absolute; display:flex; gap:7px; align-items:center; text-align:left; padding:9px 12px; border:1px solid rgba(109,74,255,.17); border-radius:16px; background:rgba(255,255,255,.88); box-shadow:0 16px 28px -19px rgba(67,47,143,.45); color:#293451; cursor:pointer; transition:transform .2s, box-shadow .2s; }} .studio-card:hover {{ transform:translateY(-4px) scale(1.03); box-shadow:0 18px 30px -15px rgba(109,74,255,.4); }} .studio-card span {{ font-size:21px; }} .studio-card b,.studio-card em {{ display:block; font-style:normal; }} .studio-card b {{ font-size:11px; }} .studio-card em {{ color:#7865b6; font-size:10px; margin-top:2px; }} .card-bedroom {{ left:10%; top:25%; }} .card-bathroom {{ right:8%; top:21%; }} .card-parking {{ right:10%; bottom:20%; }} .card-size {{ left:15%; bottom:18%; }}
+      .studio-cards {{ position:absolute; inset:0; z-index:4; pointer-events:none; }} .studio-card {{ position:absolute; display:flex; gap:7px; align-items:center; text-align:left; padding:9px 12px; border:1px solid rgba(109,74,255,.17); border-radius:16px; background:rgba(255,255,255,.88); box-shadow:0 16px 28px -19px rgba(67,47,143,.45); color:#293451; cursor:pointer; transition:transform .2s, box-shadow .2s; pointer-events:auto; }} .studio-card:hover {{ transform:translateY(-4px) scale(1.03); box-shadow:0 18px 30px -15px rgba(109,74,255,.4); }} .studio-card span {{ font-size:21px; }} .studio-card b,.studio-card em {{ display:block; font-style:normal; }} .studio-card b {{ font-size:11px; }} .studio-card em {{ color:#7865b6; font-size:10px; margin-top:2px; }} .card-bedroom {{ left:10%; top:25%; }} .card-bathroom {{ right:8%; top:21%; }} .card-parking {{ right:10%; bottom:20%; }} .card-size {{ left:15%; bottom:18%; }}
       .model-badge {{ position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:4; color:#624fa4; font-size:10px; font-weight:900; padding:7px 10px; border-radius:999px; background:rgba(255,255,255,.8); }}
       .input-drawer {{ position:absolute; z-index:8; left:20px; top:50%; width:258px; padding:24px; border-radius:22px; background:rgba(255,255,255,.96); box-shadow:0 25px 45px -22px rgba(68,45,142,.45); opacity:0; transform:translate(-130%,-50%); transition:opacity .42s ease,transform .58s cubic-bezier(.2,.9,.2,1); pointer-events:none; }} .editing .input-drawer {{ opacity:1; transform:translate(0,-50%); pointer-events:auto; }} .drawer-close {{ position:absolute; right:12px; top:10px; border:0; background:#f1edff; border-radius:50%; width:26px; height:26px; font-size:20px; cursor:pointer; color:#684dd1; }} .drawer-icon {{ font-size:31px; }} .input-drawer h3 {{ margin:7px 0 5px; font-size:22px; }} .input-drawer small {{ color:#68738c; line-height:1.3; }} .input-drawer input {{ width:100%; margin:17px 0 10px; padding:12px; border:1px solid #dfd7ff; border-radius:13px; color:#303b59; font-size:18px; font-weight:800; outline-color:#7456ff; }} .drawer-save {{ width:100%; border:0; border-radius:13px; padding:12px; color:#fff; font-weight:800; background:linear-gradient(105deg,#6d4aff,#ff68a8); cursor:pointer; }}
       .studio-building3d {{ position:relative; width:100px; height:150px; transform-style:preserve-3d; animation: studioSpin3d 9s linear infinite; }}
@@ -1199,7 +1226,7 @@ with tab_predict:
     with studio_prev:
         st.write("")
         st.markdown('<div class="ptype-cycle-btn">', unsafe_allow_html=True)
-        if st.button("◀", key="ptype_prev", width="stretch", help="Previous property type"):
+        if st.button("◀", key="ptype_prev", use_container_width=True, help="Previous property type"):
             st.session_state["predict_ptype_idx"] = (ptype_idx - 1) % len(PROPERTY_TYPES)
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1210,7 +1237,7 @@ with tab_predict:
     with studio_next:
         st.write("")
         st.markdown('<div class="ptype-cycle-btn">', unsafe_allow_html=True)
-        if st.button("▶", key="ptype_next", width="stretch", help="Next property type"):
+        if st.button("▶", key="ptype_next", use_container_width=True, help="Next property type"):
             st.session_state["predict_ptype_idx"] = (ptype_idx + 1) % len(PROPERTY_TYPES)
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
@@ -1270,11 +1297,14 @@ with tab_predict:
         [state_summary.get(state, {}).get("count", 0) for state in map_states] or [1]
     ) or 1
 
+    current_state = st.session_state.get("map_selected_state", "Selangor")
+
     map_rows = []
     for state_name in map_states:
         summary = state_summary.get(state_name, {"avg_price": 0, "count": 0})
         heat = summary["avg_price"] / max_avg
         r, g, b = heat_to_rgb(heat)
+        is_selected = state_name == current_state
         map_rows.append(
             {
                 "state": state_name,
@@ -1282,14 +1312,22 @@ with tab_predict:
                 "lon": STATE_COORDS[state_name]["lon"],
                 "avg_price": summary["avg_price"],
                 "count": summary["count"],
-                "radius": 12000 + 28000 * (summary["count"] / max_count if max_count else 0),
+                "radius": (12000 + 28000 * (summary["count"] / max_count if max_count else 0))
+                * (1.6 if is_selected else 1.0),
                 "r": r, "g": g, "b": b,
+                "line_r": 255,
+                "line_g": 210 if is_selected else 255,
+                "line_b": 0 if is_selected else 255,
+                "line_width": 5 if is_selected else 2,
+                "label": (
+                    f"{state_name}\nAvg price: RM {summary['avg_price']:,.0f}\nListings: {summary['count']:,}"
+                    if is_selected else ""
+                ),
             }
         )
 
     map_df = pd.DataFrame(map_rows)
-
-    current_state = st.session_state.get("map_selected_state", "Selangor")
+    label_df = map_df[map_df["state"] == current_state]
 
     map_col, picker_col = st.columns([2, 1])
 
@@ -1300,12 +1338,26 @@ with tab_predict:
             data=map_df,
             get_position="[lon, lat]",
             get_fill_color="[r, g, b, 210]",
-            get_line_color="[255, 255, 255, 220]",
+            get_line_color="[line_r, line_g, line_b, 255]",
+            get_line_width="line_width",
+            line_width_units="pixels",
             line_width_min_pixels=2,
             stroked=True,
             get_radius="radius",
             pickable=True,
             auto_highlight=True,
+        )
+
+        label_layer = pdk.Layer(
+            "TextLayer",
+            id="state-label-layer",
+            data=label_df,
+            get_position="[lon, lat]",
+            get_text="label",
+            get_size=15,
+            get_color=[40, 34, 70, 255],
+            get_pixel_offset="[0, -24]",
+            get_alignment_baseline="'bottom'",
         )
 
         view_state = pdk.ViewState(
@@ -1315,7 +1367,7 @@ with tab_predict:
         frozen_view = pdk.View(type="MapView", controller=False)
 
         deck = pdk.Deck(
-            layers=[layer],
+            layers=[layer, label_layer],
             initial_view_state=view_state,
             views=[frozen_view],
             map_style="light",
@@ -1358,12 +1410,23 @@ with tab_predict:
             st.caption(f"{state_summary[state]['count']:,} sample listings")
 
     if ART.city_options:
-        city_options = ["Not sure / Other"] + ART.city_options
-        default_city = st.session_state.get("city_dropdown", "Not sure / Other")
-        city_index = city_options.index(default_city) if default_city in city_options else 0
+        state_city_map = (
+            ART.sample_df.dropna(subset=["State", "City"])
+            .loc[lambda d: ~d["City"].isin(["Not sure / Other"])]
+            .groupby("State")["City"]
+            .apply(lambda s: sorted(set(s)))
+            .to_dict()
+        )
+        cities_for_state = [c for c in state_city_map.get(state, []) if c in ART.city_options]
+        if not cities_for_state:
+            cities_for_state = [state]
+
+        city_options = ["Not sure / Other"] + cities_for_state
+        if st.session_state.get("city_dropdown", "Not sure / Other") not in city_options:
+            st.session_state["city_dropdown"] = "Not sure / Other"
 
         city_choice = st.selectbox(
-            "City", city_options, index=city_index, key="city_dropdown",
+            "City", city_options, key="city_dropdown",
         )
         city = None if city_choice == "Not sure / Other" else city_choice
     else:
@@ -1399,10 +1462,10 @@ with tab_predict:
     pred_col, reset_col = st.columns(2)
 
     with pred_col:
-        predict_clicked = st.button("🔍 Predict Price", type="primary", width="stretch")
+        predict_clicked = st.button("🔍 Predict Price", type="primary", use_container_width=True)
 
     with reset_col:
-        reset_clicked = st.button("↺ Reset", width="stretch")
+        reset_clicked = st.button("↺ Reset", use_container_width=True)
 
     if reset_clicked:
         keys_to_clear = [
