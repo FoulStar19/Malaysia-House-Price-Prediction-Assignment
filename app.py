@@ -749,7 +749,6 @@ with tab_compare:
         "🌊 Residual distribution",
         "🔀 Actual vs Predicted",
         "🧭 Residuals vs Predicted",
-        "🎯 Confusion matrix",
     ]
     if diag.get("feature_importances"):
         chart_options.append("🔑 Feature importance")
@@ -858,47 +857,6 @@ with tab_compare:
                            xaxis_title="Predicted Price (RM)", yaxis_title="Residual (RM)",
                            title=f"Residuals vs Predicted — {best_name}")
         st.plotly_chart(fig, use_container_width=True)
- 
-    elif chart_choice == "🎯 Confusion matrix":
-        st.caption(
-            f"Supplementary classification-style view for the best model ({best_name}). "
-            "Predicted prices are grouped into the same four data-derived price brackets; "
-            "rows are actual brackets and columns are predicted brackets."
-        )
-        cm = np.asarray(diag.get("bracket_confusion_matrix", []), dtype=int)
-        labels = list(diag.get("price_bin_labels", []))
-
-        if cm.size and labels and cm.shape[0] == len(labels) and cm.shape[1] == len(labels):
-            # Keep the matrix square and use the same bracket labels as the backend.
-            fig = go.Figure(
-                data=go.Heatmap(
-                    z=cm,
-                    x=labels,
-                    y=labels,
-                    text=cm,
-                    texttemplate="%{text}",
-                    textfont=dict(size=14),
-                    colorscale="Blues",
-                    colorbar=dict(title="Count"),
-                    hovertemplate=(
-                        "Actual: %{y}<br>Predicted: %{x}<br>Count: %{z}<extra></extra>"
-                    ),
-                )
-            )
-            fig.update_layout(
-                **PLOTLY_LAYOUT,
-                height=520,
-                title=f"Confusion Matrix — {best_name}",
-                xaxis_title="Predicted Price Bracket",
-                yaxis_title="Actual Price Bracket",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption(
-                f"Bracket accuracy: {float(diag.get('bracket_accuracy', 0.0)):.1%} · "
-                f"Macro F1: {float(diag.get('bracket_f1', 0.0)):.1%}"
-            )
-        else:
-            st.info("Confusion matrix data is unavailable.")
 
     elif chart_choice == "🔑 Feature importance":
         importance_df = (
